@@ -35,6 +35,7 @@ export const OrgSchema = new Schema(
       type: String
     },
     description: String,
+    feishuOrgActive: Boolean,
     updateTime: {
       type: Date,
       default: () => new Date()

@@ -29,6 +29,9 @@ import type { GetPaginationRecordsBodyType } from '@fastgpt/global/openapi/core/
 import { AUTH_ERROR_EVENT_NAME } from '@/web/common/api/request';
 import { clearToken } from '@/web/support/user/auth';
 import { resetUserModelCatalogAfterLogin } from '@/web/core/ai/model/useUserModelStore';
+import { getFeishuLoginStartPath } from '@/web/support/user/loginRedirect/url';
+import { parseHeaderCert, TokenName } from '@fastgpt/service/support/permission/auth/common';
+import { serviceEnv } from '@fastgpt/service/env';
 
 const logger = getLogger(LogCategories.MODULE.CHAT.ITEM);
 
@@ -299,7 +302,17 @@ export default Render;
 
 export async function getServerSideProps(context: any) {
   const appId = context?.query?.appId || '';
-  const shouldInitUserInfo = !!context.req?.cookies?.fastgpt_token;
+  const shouldInitUserInfo = !!context.req?.cookies?.[TokenName];
+  if (serviceEnv.FEISHU_ORG_ENABLED) {
+    const session =
+      shouldInitUserInfo &&
+      (await parseHeaderCert({ req: context.req, authToken: true }).catch(() => undefined));
+    if (!session) {
+      return {
+        redirect: { destination: getFeishuLoginStartPath(context.resolvedUrl), permanent: false }
+      };
+    }
+  }
 
   const chatQuoteReaderConfig = await (async () => {
     try {

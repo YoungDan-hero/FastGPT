@@ -18,6 +18,7 @@ import {
   type OutLinkUpdateResponseType
 } from '@fastgpt/global/openapi/support/outLink/api';
 import { PublishChannelEnum } from '@fastgpt/global/support/outLink/constant';
+import { serviceEnv } from '@fastgpt/service/env';
 
 // {
 // _id?: string; // Outlink 的 ID
@@ -77,7 +78,11 @@ export async function handler(
     ...(name !== undefined ? { name } : {}),
     showCite,
     canDownloadSource,
-    ...(isShareLink && allowAnonymous !== undefined ? { allowAnonymous } : {}),
+    ...(isShareLink && serviceEnv.FEISHU_ORG_ENABLED
+      ? { allowAnonymous: false }
+      : isShareLink && allowAnonymous !== undefined
+        ? { allowAnonymous }
+        : {}),
     showRunningStatus,
     showSkillReferences,
     showFullText,

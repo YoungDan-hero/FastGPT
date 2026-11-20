@@ -9,15 +9,20 @@ import {
 } from '@test/utils/instanceConfigSnapshot';
 import { buildSystemFrontendConfig } from '@fastgpt/service/common/system/systemInstanceConfig/frontend';
 import { BillPayWayEnum } from '@fastgpt/global/support/wallet/bill/constants';
+import type { UserType } from '@fastgpt/global/support/user/type';
 
-const state = vi.hoisted(() => ({ feConfigs: {} as any, owner: true }));
+const state = vi.hoisted(() => ({
+  feConfigs: {} as any,
+  owner: true,
+  feishuProfile: undefined as UserType['feishuProfile']
+}));
 const user = vi.hoisted(() => ({
   username: 'root',
   _id: 'owned-user',
   userId: 'owned-user',
   memberName: 'Owned',
   permission: { isOwner: true },
-  team: { teamId: 'owned-team', permission: {}, balance: 0 }
+  team: { teamId: 'owned-team', memberName: 'Directory display name', permission: {}, balance: 0 }
 }));
 vi.mock('@/web/common/system/useSystemStore', () => ({
   useSystemStore: Object.assign(
@@ -27,7 +32,11 @@ vi.mock('@/web/common/system/useSystemStore', () => ({
 }));
 vi.mock('@/web/support/user/useUserStore', () => ({
   useUserStore: () => ({
-    userInfo: { ...user, permission: { isOwner: state.owner } },
+    userInfo: {
+      ...user,
+      permission: { isOwner: state.owner },
+      feishuProfile: state.feishuProfile
+    },
     teamPlanStatus: {
       standard: { currentSubLevel: 'free', maxTeamMember: 1, maxAppAmount: 1, maxDatasetAmount: 1 },
       datasetMaxSize: 10,
@@ -108,7 +117,7 @@ import AccountInfo from '@/pages/account/info';
 import QRCodePayModal from '@/components/support/wallet/QRCodePayModal';
 
 /** 仅验证入口条件/链接；请求 hook 不执行，不查询账单、生成二维码或提交支付。 */
-describe('commercial configuration entry consumption', () => {
+describe('account information and commercial configuration entries', () => {
   let dom: JSDOM;
   let root: Root;
   let container: HTMLDivElement;
@@ -134,6 +143,7 @@ describe('commercial configuration entry consumption', () => {
     vi.stubGlobal('React', React);
     vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
     state.owner = true;
+    state.feishuProfile = undefined;
     container = document.createElement('div');
     root = createRoot(container);
   });
@@ -141,6 +151,14 @@ describe('commercial configuration entry consumption', () => {
     await act(async () => root.unmount());
     dom.window.close();
     vi.unstubAllGlobals();
+  });
+
+  it('uses the Feishu directory display name when the account also has an alias', async () => {
+    state.feishuProfile = { nickname: 'Directory alias', departmentNames: [] };
+    await render(React.createElement(AccountInfo));
+
+    expect(container.textContent).toContain('飞书显示名Directory display name');
+    expect(container.textContent).not.toContain('Directory alias');
   });
 
   it('independently shows coupon and discount entries only to the owner', async () => {

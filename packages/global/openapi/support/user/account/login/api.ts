@@ -16,6 +16,20 @@ import {
 import { PublicAuthTrackRegisterParamsSchema } from '../common';
 import { OpenObjectOpenApiMeta } from '../../../../../common/zod/openapi';
 
+export const FeishuOrgLoginStartQuerySchema = z.object({
+  lastRoute: z.string().max(2048).optional()
+});
+export type FeishuOrgLoginStartQuery = z.infer<typeof FeishuOrgLoginStartQuerySchema>;
+
+export const FeishuOrgLoginCallbackQuerySchema = z.object({
+  code: z.string().min(1).max(4096).optional(),
+  state: z
+    .string()
+    .regex(/^[A-Za-z0-9_-]{43}$/)
+    .optional()
+});
+export type FeishuOrgLoginCallbackQuery = z.infer<typeof FeishuOrgLoginCallbackQuerySchema>;
+
 const OpenAPITeamTmbItemSchema = TeamTmbItemSchema.omit({
   permission: true
 }).extend({

@@ -10,6 +10,10 @@ import { formatTeamAccountCancellationSummary } from './account/cancellation/for
 import { hasStoredPassword } from '@fastgpt/global/support/user/utils';
 import { getUserPasswordAvailability } from './account/password/service';
 import { SsoConfigurationUnavailableError } from '../../common/system/sso';
+import { serviceEnv } from '../../env';
+import { getOrgsByTmbId } from '../permission/org/controllers';
+import { MongoOrgModel } from '../permission/org/orgSchema';
+import { getFeishuDepartmentFallbackName } from './feishu/directory';
 
 export async function authUserExist({ userId, username }: { userId?: string; username?: string }) {
   if (userId) {
@@ -64,7 +68,7 @@ export async function getUserDetail({
     }
     return Promise.reject(ERROR_ENUM.unAuthorization);
   })();
-  const query = MongoUser.findById(tmb.userId).select('+password');
+  const query = MongoUser.findById(tmb.userId).select('+password +feishuOrg');
   if (session) query.session(session);
   const user = await query;
 
@@ -78,10 +82,38 @@ export async function getUserDetail({
     ...tmb,
     permission
   };
+  const feishuProfile = await (async () => {
+    if (
+      !serviceEnv.FEISHU_ORG_ENABLED ||
+      !user.feishuOrg ||
+      user.feishuOrg.appId !== serviceEnv.FEISHU_ORG_APP_ID
+    ) {
+      return;
+    }
+    const memberships = await getOrgsByTmbId({ teamId: tmb.teamId, tmbId: tmb.tmbId });
+    const departments = await MongoOrgModel.find(
+      {
+        _id: { $in: memberships.map(({ orgId }) => orgId) },
+        teamId: tmb.teamId,
+        feishuOrgActive: true
+      },
+      'name pathId'
+    )
+      .sort({ name: 1 })
+      .lean();
+    return {
+      nickname: user.feishuOrg.nickname || undefined,
+      departmentNames: departments
+        .filter(({ name, pathId }) => name !== getFeishuDepartmentFallbackName(pathId))
+        .map(({ name }) => name)
+    };
+  })();
 
   return {
     _id: String(user._id),
     username: user.username,
+    ...(isRoot && { isSystemAdmin: true }),
+    ...(feishuProfile && { feishuProfile }),
     status: user.status,
     avatar: tmb.avatar,
     timezone: user.timezone,
@@ -95,9 +127,11 @@ export async function getUserDetail({
       : {}),
     hasPassword: hasStoredPassword(user.password),
     // 详情展示遇到 Pro 短暂不可用时保守隐藏密码入口，不能阻断已登录用户的普通操作。
-    passwordAvailable: await getUserPasswordAvailability(user.username).catch((error: unknown) => {
-      if (error instanceof SsoConfigurationUnavailableError) return false;
-      throw error;
-    })
+    passwordAvailable:
+      !feishuProfile &&
+      (await getUserPasswordAvailability(user.username).catch((error: unknown) => {
+        if (error instanceof SsoConfigurationUnavailableError) return false;
+        throw error;
+      }))
   };
 }

@@ -6,6 +6,7 @@ import { buildSameOriginUrl } from '@fastgpt/service/common/security/network';
 import { Readable } from 'stream';
 import { finished, pipeline } from 'node:stream/promises';
 import { FASTGPT_PRO_TOKEN_HEADER } from '@fastgpt/global/common/system/constants';
+import { isProtectedFeishuProMutation } from '@/service/support/user/feishuProtection';
 
 /** 原样转发 Pro API 的请求和响应流；等待回包结束，避免 NextAPI 抢先生成默认 JSON。 */
 async function handler(req: NextApiRequest, res: NextApiResponse): Promise<void> {
@@ -48,6 +49,10 @@ async function handler(req: NextApiRequest, res: NextApiResponse): Promise<void>
       redirect: isFileRoute ? 'manual' : 'follow',
       body: req.method === 'GET' || req.method === 'HEAD' ? null : (req as any)
     });
+
+    if (await isProtectedFeishuProMutation(req, targetUrl, request)) {
+      return jsonRes(res, { code: 403, error: '受保护的飞书管理员不能删除或移出团队' });
+    }
 
     const response = await fetch(request);
 

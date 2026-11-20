@@ -8,6 +8,7 @@ export type OrgSchemaType = {
   name: string;
   avatar: string;
   description?: string;
+  feishuOrgActive?: boolean;
   updateTime: Date;
 };
 

@@ -212,8 +212,9 @@ export const dispatchAgentDatasetSearch = async ({
 
   const nodeSummary = createNodeSummary();
   try {
+    const checkMember = datasetParams.authTmbId || serviceEnv.FEISHU_ORG_ENABLED;
     const requestedDatasetIds = datasetParams.datasets.map((item) => item.datasetId);
-    const datasetIds = datasetParams.authTmbId
+    const datasetIds = checkMember
       ? await filterDatasetsByTmbId({
           datasetIds: requestedDatasetIds,
           tmbId
@@ -227,7 +228,7 @@ export const dispatchAgentDatasetSearch = async ({
     }
 
     // Collection 级权限可读集合仅对真实成员鉴权生效；authTmbId 未设置时不做 collection 级过滤。
-    const readableCollectionIdList = datasetParams.authTmbId
+    const readableCollectionIdList = checkMember
       ? await resolveReadableCollectionIds({
           teamId,
           datasetIds,
@@ -501,3 +502,4 @@ export const dispatchAgentDatasetSearch = async ({
     };
   }
 };
+import { serviceEnv } from '../../../../../../../env';

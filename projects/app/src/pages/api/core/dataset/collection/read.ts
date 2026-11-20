@@ -76,6 +76,7 @@ async function handler(req: ApiRequestProps): Promise<ReadCollectionSourceRespon
 
     const collection = await getCollectionWithDataset(collectionId);
     await authCollectionInChat({
+      actor: authRes,
       sourceType,
       sourceId: resolvedSourceId,
       chatId,

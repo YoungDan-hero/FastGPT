@@ -57,6 +57,7 @@ export const FastGPTTeamModeSchema = z.enum(['multi', 'single', 'sync']);
 export type FastGPTTeamModeType = z.infer<typeof FastGPTTeamModeSchema>;
 
 export const FastGPTFeConfigsSchema = z.looseObject({
+  feishuOrgLogin: z.boolean().optional(),
   /**
    * 同义词能力的前端投影，不是第二个服务端开关。
    * 当前服务端以 ENV `DATASET_SYNONYM_ENABLED` 为权威，默认关闭，不从实例配置读取；

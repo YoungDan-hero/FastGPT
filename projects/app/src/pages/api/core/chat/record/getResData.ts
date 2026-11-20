@@ -6,12 +6,15 @@ import { NextAPI } from '@/service/middleware/entry';
 import { type ChatHistoryItemResType } from '@fastgpt/global/core/chat/type';
 import {
   filterPublicNodeResponseData,
+  getFlatAppResponses,
   stripModerationRecordsFromNodeResponses
 } from '@fastgpt/global/core/chat/utils';
 import { GetResDataQuerySchema } from '@fastgpt/global/openapi/core/chat/record/api';
 import { parseApiInput } from '@fastgpt/service/common/zod/requestParseError';
 import { getChatItemResponseData } from '@fastgpt/service/core/chat/nodeResponseStorage';
 import { buildChatSourceQuery } from '@fastgpt/service/core/chat/source';
+import { serviceEnv } from '@fastgpt/service/env';
+import { authFeishuChatCollections } from '@/service/support/permission/auth/chat';
 
 export async function handler(req: ApiRequestProps): Promise<ChatHistoryItemResType[]> {
   const { customUid, authProxy, sourceType, sourceId, chatId, dataId, outLinkAuthData } =
@@ -43,7 +46,7 @@ export async function handler(req: ApiRequestProps): Promise<ChatHistoryItemResT
       dataId,
       obj: ChatRoleEnum.AI
     },
-    'dataId obj responseData'
+    'dataId obj responseData citeCollectionIds'
   ).lean();
 
   if (chatData?.obj !== ChatRoleEnum.AI) {
@@ -59,6 +62,17 @@ export async function handler(req: ApiRequestProps): Promise<ChatHistoryItemResT
     chatItemDataId: dataId,
     fallbackResponseData: hasInlineResponseData ? chatData.responseData || [] : undefined
   });
+  if (serviceEnv.FEISHU_ORG_ENABLED) {
+    const citationCollections = getFlatAppResponses(flowResponses).flatMap((response) =>
+      [...(response.quoteList ?? []), ...(response.retrievalResults ?? [])].flatMap((quote) =>
+        quote.collectionId ? [quote.collectionId] : []
+      )
+    );
+    await authFeishuChatCollections(
+      [...(chatData.citeCollectionIds ?? []), ...citationCollections],
+      authRes
+    );
+  }
   if (outLinkAuthData?.shareId) {
     return filterPublicNodeResponseData({
       responseDetail: authRes.showCite,

@@ -1,3 +1,4 @@
+import { isSystemAdminUser } from '@fastgpt/global/support/user/utils';
 import { useEffect } from 'react';
 import type React from 'react';
 import { Box } from '@chakra-ui/react';
@@ -8,9 +9,9 @@ import SecondaryNavigationContainer from '@/pageComponents/common/SecondaryNavig
 import { useAdminMenu } from '@/pageComponents/admin/useAdminMenu';
 
 /**
- * 管理员区域（/admin/*）的二级导航壳层，仅 root 用户可见。
+ * 管理员区域（/admin/*）的二级导航壳层。
  * 复用 SecondaryNavigationContainer 两级分组侧栏：父级可展开子项，
- * 非 root 访问时重定向回个人中心。
+ * 普通账号访问时重定向回个人中心。
  */
 const AdminContainer = ({
   children,
@@ -22,7 +23,7 @@ const AdminContainer = ({
   const router = useRouter();
   const { initd, licenseLoading } = useSystemStore();
   const { userInfo } = useUserStore();
-  const isRoot = userInfo?.username === 'root';
+  const isRoot = isSystemAdminUser(userInfo);
 
   const currentTab = router.pathname;
   const { menuList } = useAdminMenu();

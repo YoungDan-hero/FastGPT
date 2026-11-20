@@ -63,6 +63,7 @@ async function handler(req: ApiRequestProps): Promise<GetQuoteDataResponse> {
       const [collection] = await Promise.all([
         MongoDatasetCollection.findById(datasetData.collectionId).lean(),
         authCollectionInChat({
+          actor: authRes,
           sourceType,
           sourceId: resolvedSourceId,
           chatId,

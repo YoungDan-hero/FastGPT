@@ -18,6 +18,8 @@ import {
   ShareOutLinkEditSchema
 } from '@fastgpt/global/openapi/support/outLink/api';
 import { PublishChannelEnum } from '@fastgpt/global/support/outLink/constant';
+import { serviceEnv } from '@fastgpt/service/env';
+import { ERROR_ENUM } from '@fastgpt/global/common/error/errorCode';
 
 vi.mock('@fastgpt/service/support/permission/publish/authLink', () => ({
   authOutLinkValid: vi.fn()
@@ -94,6 +96,26 @@ describe('authOutLink', () => {
       tokenUrl: undefined
     });
     expect(result.uid).toBe('verified-uid');
+  });
+
+  it('requires an employee session even for an existing anonymous link in Feishu mode', async () => {
+    const enabled = serviceEnv.FEISHU_ORG_ENABLED;
+    Object.assign(serviceEnv, { FEISHU_ORG_ENABLED: true });
+    const request = { shareId: 'share-id', outLinkUid: 'caller-chosen', req: {} as any };
+    try {
+      vi.mocked(parseHeaderCert).mockRejectedValueOnce(ERROR_ENUM.unAuthorization);
+      await expect(authOutLink(request)).rejects.toBe(ERROR_ENUM.unAuthorization);
+      vi.mocked(parseHeaderCert).mockResolvedValueOnce({
+        userId: 'user-id',
+        tmbId: 'link-team-member-id',
+        teamId: 'team-id',
+        isRoot: false
+      } as any);
+      expect((await authOutLink(request)).uid).toBe('link-team-member-id');
+      expect(authOutLinkInit).not.toHaveBeenCalled();
+    } finally {
+      Object.assign(serviceEnv, { FEISHU_ORG_ENABLED: enabled });
+    }
   });
 
   it('rejects an empty external UID before loading or initializing the link', async () => {

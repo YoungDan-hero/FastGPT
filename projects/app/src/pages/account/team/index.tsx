@@ -1,6 +1,7 @@
 'use client';
+import { isSystemAdminUser } from '@fastgpt/global/support/user/utils';
 import AccountContainer from '@/pageComponents/account/AccountContainer';
-import { Box, Flex } from '@chakra-ui/react';
+import { Box, Flex, Text } from '@chakra-ui/react';
 import { useSafeTranslation } from '@fastgpt/web/hooks/useSafeTranslation';
 import TeamSelector from '@/pageComponents/account/TeamSelector';
 import { useUserStore } from '@/web/support/user/useUserStore';
@@ -22,6 +23,7 @@ const PermissionManage = dynamic(
 const AuditLog = dynamic(() => import('@/pageComponents/account/team/Audit/index'));
 const GroupManage = dynamic(() => import('@/pageComponents/account/team/GroupManage/index'));
 const OrgManage = dynamic(() => import('@/pageComponents/account/team/OrgManage/index'));
+const FeishuAccess = dynamic(() => import('@/pageComponents/account/team/FeishuAccess'));
 
 export enum TeamTabEnum {
   member = 'member',
@@ -40,7 +42,7 @@ const Team = () => {
   const { userInfo, teamPlanStatus } = useUserStore();
   const standardPlan = teamPlanStatus?.standard;
   const level = standardPlan?.currentSubLevel;
-  const { subPlans } = useSystemStore();
+  const { subPlans, feConfigs } = useSystemStore();
   const planContent = useMemo(() => {
     const plan = level !== undefined ? subPlans?.standard?.[level] : undefined;
     if (!plan) return;
@@ -70,7 +72,7 @@ const Team = () => {
         value={teamTab}
         onChange={(e) => {
           if (
-            userInfo?.username !== 'root' &&
+            !isSystemAdminUser(userInfo) &&
             e === TeamTabEnum.audit &&
             planContent &&
             !planContent?.auditLogStoreDuration
@@ -90,16 +92,28 @@ const Team = () => {
         }}
       />
     ),
-    [
-      planContent,
-      router,
-      t,
-      teamTab,
-      toast,
-      userInfo?.team.permission.hasManagePer,
-      userInfo?.username
-    ]
+    [planContent, router, t, teamTab, toast, userInfo?.team.permission.hasManagePer, userInfo]
   );
+
+  if (feConfigs?.feishuOrgLogin) {
+    return (
+      <AccountContainer>
+        <Box
+          {...accountPageRootStyles}
+          px={[4, 6]}
+          py={[4, 6]}
+          bg="myGray.50"
+          overflowY={['visible', 'auto']}
+        >
+          {isSystemAdminUser(userInfo) ? (
+            <FeishuAccess />
+          ) : (
+            <Text color="myGray.600">部门由飞书通讯录同步。请联系系统管理员配置资源权限。</Text>
+          )}
+        </Box>
+      </AccountContainer>
+    );
+  }
 
   return (
     <AccountContainer>
@@ -184,6 +198,9 @@ const Team = () => {
 
 const Render = () => {
   const { userInfo } = useUserStore();
+  const { feConfigs } = useSystemStore();
+
+  if (userInfo?.team && feConfigs?.feishuOrgLogin) return <Team />;
 
   return !!userInfo?.team ? (
     <TeamModalContextProvider>

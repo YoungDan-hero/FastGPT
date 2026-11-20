@@ -3,6 +3,25 @@ import { ObjectIdSchema } from '../../../../../common/type/mongo';
 import { BoolSchema } from '../../../../../common/zod';
 import { PermissionSchema } from '../../../../../support/permission/controller';
 
+export const FeishuAccessBodySchema = z.object({
+  principal: z.enum(['department', 'member']),
+  principalId: ObjectIdSchema,
+  resource: z.enum(['app', 'dataset', 'collection']),
+  resourceId: ObjectIdSchema,
+  role: z.enum(['read', 'write', 'manage', 'remove'])
+});
+export type FeishuAccessBody = z.infer<typeof FeishuAccessBodySchema>;
+
+const FeishuAccessOption = z.object({ id: ObjectIdSchema, name: z.string() });
+export const FeishuAccessResponseSchema = z.object({
+  departments: z.array(FeishuAccessOption),
+  members: z.array(FeishuAccessOption),
+  app: z.array(FeishuAccessOption),
+  dataset: z.array(FeishuAccessOption),
+  collection: z.array(FeishuAccessOption)
+});
+export type FeishuAccessResponse = z.infer<typeof FeishuAccessResponseSchema>;
+
 const OrgIdOrRootSchema = z.union([ObjectIdSchema, z.literal('')]).meta({
   example: '68ad85a7463006c963799a06',
   description: '部门 ID；空字符串表示团队根部门'

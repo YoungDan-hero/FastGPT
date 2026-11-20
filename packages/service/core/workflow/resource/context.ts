@@ -19,10 +19,12 @@ import { getWorkflowResourceContext } from '../utils/context';
 export const createWorkflowResourceContext = ({
   resources,
   teamId,
+  allowFeishuKnowledgeWrite,
   isRoot = getWorkflowResourceContext()?.isRoot ?? false
 }: {
   resources: AppResourcesType;
   teamId?: string;
+  allowFeishuKnowledgeWrite?: boolean;
   isRoot?: boolean;
 }): WorkflowResourceContext => {
   const normalizedResources = mergeAppResources(resources);
@@ -32,6 +34,7 @@ export const createWorkflowResourceContext = ({
 
   return {
     teamId,
+    ...(allowFeishuKnowledgeWrite && { allowFeishuKnowledgeWrite }),
     isRoot,
     resourceMap
   };

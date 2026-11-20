@@ -24,6 +24,7 @@ import { MongoTeamSub } from '../../../../support/wallet/sub/schema';
 import { getLogger, LogCategories } from '../../../../common/logger';
 import { withTeamLock } from '../../lock';
 import { MongoOutLink } from '../../../outLink/schema';
+import { assertFeishuAdminTeamCanBeDeleted } from '../../feishu/member';
 
 const logger = getLogger(LogCategories.MODULE.USER.TEAM);
 
@@ -47,6 +48,7 @@ export const teamDeleteProcessor: Processor<TeamDeleteJobData> = async (job) =>
     }
 
     try {
+      await assertFeishuAdminTeamCanBeDeleted(teamId);
       // 1. 检查团队是否存在
       const team = await MongoTeam.findById(teamId);
       if (!team) {

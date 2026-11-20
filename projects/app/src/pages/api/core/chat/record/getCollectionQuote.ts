@@ -64,6 +64,7 @@ async function handler(req: ApiRequestProps): Promise<GetCollectionQuoteResType>
       'time'
     ).lean(),
     authCollectionInChat({
+      actor: authRes,
       sourceType,
       sourceId: resolvedSourceId,
       chatId,

@@ -22,6 +22,7 @@ import { buildChatSourceQuery } from './source';
 import { authOutLink } from '../../support/permission/publish/authChat';
 import { ApiKeyTypeEnum } from '@fastgpt/global/support/openapi/constants';
 import type { ChatAuthProxy, OutLinkChatAuthProps } from '@fastgpt/global/support/permission/chat';
+import { serviceEnv } from '../../env';
 
 /** 已通过资源鉴权的会话访问范围；省略成员表示允许同团队访问，outLinkUid 在该范围内进一步精确限制外部使用者。 */
 export type ChatAccessScope = {
@@ -120,7 +121,10 @@ export const authChatTargetCrud = async ({
     outLinkAuthData?.shareId &&
     outLinkAuthData.outLinkUid
   ) {
-    const { uid, appId, outLinkConfig } = await authOutLink({ ...outLinkAuthData, req: props.req });
+    const { uid, appId, outLinkConfig, appAccess } = await authOutLink({
+      ...outLinkAuthData,
+      req: props.req
+    });
     const resolvedSourceId = String(appId);
     if (sourceId && sourceId !== resolvedSourceId) throw ChatErrEnum.unAuthChat;
     const chat = await loadChat(resolvedSourceId);
@@ -132,11 +136,11 @@ export const authChatTargetCrud = async ({
       sourceType,
       sourceId: resolvedSourceId,
       teamId: String(outLinkConfig.teamId),
-      tmbId: String(outLinkConfig.tmbId),
+      tmbId: String(appAccess?.tmbId ?? outLinkConfig.tmbId),
       uid,
       publishSource,
       chat,
-      isRoot: false,
+      isRoot: serviceEnv.FEISHU_ORG_ENABLED && appAccess?.isRoot === true,
       canWrite: false,
       authType: AuthUserTypeEnum.outLink,
       showCite: outLinkConfig.showCite ?? false,

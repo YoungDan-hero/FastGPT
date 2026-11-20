@@ -11,7 +11,11 @@ const mocks = vi.hoisted(() => ({
   router: { isReady: false, query: {} as Record<string, string> },
   system: {
     initd: true,
-    feConfigs: { sso: { enabled: true, autoLogin: true } }
+    feConfigs: {
+      sso: { enabled: true, autoLogin: true },
+      feishuOrgLogin: false,
+      systemTitle: 'FastGPT'
+    }
   },
   startLogin: vi.fn().mockResolvedValue(undefined),
   resetChatCache: vi.fn()
@@ -22,11 +26,15 @@ vi.mock('@/web/common/system/useSystemStore', () => ({ useSystemStore: () => moc
 vi.mock('@/web/core/chat/context/useChatStore', () => ({
   useChatStore: () => ({ resetChatCache: mocks.resetChatCache })
 }));
-vi.mock('@fastgpt/web/hooks/useSystem', () => ({ useSystem: () => ({ isPc: true }) }));
 vi.mock('@chakra-ui/react', () => ({
-  Box: ({ children }: { children: React.ReactNode }) => children,
-  Flex: ({ children }: { children: React.ReactNode }) => children
+  Flex: ({ children }: { children: React.ReactNode }) => children,
+  Button: ({ as, href, children }: { as: string; href: string; children: React.ReactNode }) =>
+    React.createElement(as, { href }, children),
+  Text: ({ as = 'p', role, children }: { as?: string; role?: string; children: React.ReactNode }) =>
+    React.createElement(as, { role }, children)
 }));
+vi.mock('@fastgpt/web/components/common/Icon', () => ({ default: () => null }));
+vi.mock('@fastgpt/web/components/common/Image/MyImage', () => ({ default: () => null }));
 vi.mock('@/pageComponents/login/LoginForm/useLoginMethods', () => ({
   useLoginMethods: () => ({ startLogin: mocks.startLogin })
 }));
@@ -36,7 +44,6 @@ vi.mock('@/pageComponents/login/components/LoginFormPanel', () => ({
 }));
 vi.mock('@/pageComponents/login/components/ChineseRedirectModal', () => ({ default: () => null }));
 vi.mock('@/pageComponents/login/components/CookieConsentModal', () => ({ default: () => null }));
-vi.mock('@/components/Select/I18nLngSelector', () => ({ default: () => null }));
 vi.mock('@/pageComponents/login/LoginForm/LoginGuideLink', () => ({ default: () => null }));
 
 describe('LoginContainer route initialization', () => {
@@ -65,7 +72,11 @@ describe('LoginContainer route initialization', () => {
     mocks.router.isReady = false;
     mocks.router.query = {};
     mocks.system.initd = true;
-    mocks.system.feConfigs = { sso: { enabled: true, autoLogin: true } };
+    mocks.system.feConfigs = {
+      sso: { enabled: true, autoLogin: true },
+      feishuOrgLogin: false,
+      systemTitle: 'FastGPT'
+    };
     container = document.createElement('div');
     document.body.appendChild(container);
     root = createRoot(container);
@@ -79,12 +90,27 @@ describe('LoginContainer route initialization', () => {
   });
 
   it('uses the server-provided rootLogin query in SSR HTML without waiting locally', async () => {
+    mocks.system.feConfigs.feishuOrgLogin = true;
     mocks.router.query = { rootLogin: '1' };
     expect(renderToString(React.createElement(LoginContainer, { onSuccess: vi.fn() }))).toContain(
       LoginPageTypeEnum.passwordLogin
     );
     await render();
     expect(container.textContent).toBe(LoginPageTypeEnum.passwordLogin);
+    expect(mocks.startLogin).not.toHaveBeenCalled();
+  });
+
+  it('shows the branded Feishu retry with its return path when authorization fails', async () => {
+    mocks.system.feConfigs.feishuOrgLogin = true;
+    mocks.router.query = { feishuError: '1', lastRoute: '/dashboard/agent' };
+
+    await render();
+
+    expect(container.querySelector('h1')?.textContent).toBe('FastGPT');
+    expect(container.querySelector('a')?.getAttribute('href')).toContain(
+      '/api/support/user/account/login/feishu/start?lastRoute=%2Fdashboard%2Fagent'
+    );
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain('飞书登录未完成');
     expect(mocks.startLogin).not.toHaveBeenCalled();
   });
 

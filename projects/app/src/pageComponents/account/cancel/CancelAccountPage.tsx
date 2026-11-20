@@ -146,7 +146,9 @@ const CancelAccountPage = () => {
   const onBack = useCallback(() => {
     if (isPendingView) {
       setUserInfo(null);
-      void router.replace('/login');
+      void router.replace(
+        useSystemStore.getState().feConfigs?.feishuOrgLogin ? '/login?loggedOut=1' : '/login'
+      );
       return;
     }
     void router.replace('/account/info');

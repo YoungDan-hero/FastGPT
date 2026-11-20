@@ -70,6 +70,7 @@ async function handler(req: ApiRequestProps, res: NextApiResponse) {
     const [collection] = await Promise.all([
       getCollectionWithDataset(collectionId),
       authCollectionInChat({
+        actor: authRes,
         sourceType,
         sourceId: resolvedSourceId,
         chatId,

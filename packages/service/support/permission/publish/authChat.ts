@@ -14,6 +14,7 @@ import { parseHeaderCert } from '../auth/common';
 import { MongoTeamMember } from '../../user/team/teamMemberSchema';
 import { notLeaveStatus } from '@fastgpt/global/support/user/team/constant';
 import { AppErrEnum } from '@fastgpt/global/common/error/code/app';
+import { serviceEnv } from '../../../env';
 
 /** 受保护外链按链接所属团队解析登录成员，并校验应用读取权限。 */
 const authOutLinkAppAccess = async ({
@@ -23,9 +24,9 @@ const authOutLinkAppAccess = async ({
   req: NodeHttpRequest;
   outLinkConfig: Pick<ShareOutLinkSchemaType, 'allowAnonymous' | 'appId' | 'teamId'>;
 }) => {
-  if (outLinkConfig.allowAnonymous) return;
+  if (outLinkConfig.allowAnonymous && !serviceEnv.FEISHU_ORG_ENABLED) return;
 
-  const { userId, tmbId, isRoot } = await parseHeaderCert({ req, authToken: true });
+  const { userId, teamId, tmbId, isRoot } = await parseHeaderCert({ req, authToken: true });
 
   // A protected link belongs to one team. Resolve the authenticated user in that team
   // instead of trusting the caller-provided outLinkUid as the chat identity.
@@ -36,9 +37,12 @@ const authOutLinkAppAccess = async ({
       per: ReadPermissionVal,
       isRoot
     });
-    return { tmbId };
+    return { tmbId, isRoot };
   }
 
+  if (serviceEnv.FEISHU_ORG_ENABLED && teamId !== String(outLinkConfig.teamId)) {
+    throw AppErrEnum.unAuthApp;
+  }
   const member = await MongoTeamMember.findOne({
     userId,
     teamId: outLinkConfig.teamId,
@@ -54,7 +58,7 @@ const authOutLinkAppAccess = async ({
     isRoot
   });
 
-  return { tmbId: memberTmbId };
+  return { tmbId: memberTmbId, isRoot };
 };
 
 /** 校验外链及应用访问资格，再通过发布配置中的身份钩子解析可信会话 UID。 */
@@ -66,6 +70,7 @@ export const authOutLink = async ({
   uid: string;
   appId: string;
   outLinkConfig: ShareOutLinkSchemaType;
+  appAccess?: { tmbId: string; isRoot: boolean };
 }> => {
   if (!outLinkUid) {
     return Promise.reject(OutLinkErrEnum.linkUnInvalid);
@@ -73,14 +78,15 @@ export const authOutLink = async ({
   const result = await authOutLinkValid({ shareId });
   const appAccess = await authOutLinkAppAccess({ req, outLinkConfig: result.outLinkConfig });
 
-  const { uid } = await authOutLinkInit({
-    outLinkUid,
-    tokenUrl: result.outLinkConfig.limit?.hookUrl
-  });
+  const { uid } =
+    serviceEnv.FEISHU_ORG_ENABLED && appAccess
+      ? { uid: appAccess.tmbId }
+      : await authOutLinkInit({ outLinkUid, tokenUrl: result.outLinkConfig.limit?.hookUrl });
 
   return {
     ...result,
-    uid: appAccess?.tmbId ?? uid
+    uid: appAccess?.tmbId ?? uid,
+    ...(serviceEnv.FEISHU_ORG_ENABLED && appAccess && { appAccess })
   };
 };
 
@@ -99,9 +105,12 @@ export async function authOutLinkChatStart({
   const appAccess = await authOutLinkAppAccess({ req, outLinkConfig });
 
   // 社区版保持历史行为；商业版校验改为本地执行，不再依赖 Pro HTTP 接口。
-  const { uid } = isProVersion()
-    ? await authOutLinkLimit({ outLink: outLinkConfig, outLinkUid, question })
-    : { uid: outLinkUid };
+  const { uid } =
+    serviceEnv.FEISHU_ORG_ENABLED && appAccess
+      ? { uid: appAccess.tmbId }
+      : isProVersion()
+        ? await authOutLinkLimit({ outLink: outLinkConfig, outLinkUid, question })
+        : { uid: outLinkUid };
 
   // 需登录链接下 appAccess.tmbId 是校验过的访客，运行身份（runningUserInfo）与存档
   // 归属都取访客；免登录链接 appAccess 为 undefined，回退发布者。

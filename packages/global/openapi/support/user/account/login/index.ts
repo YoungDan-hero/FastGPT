@@ -2,6 +2,8 @@ import type { OpenAPIPath } from '../../../../type';
 import { DevApiTagsMap } from '../../../../tag';
 import {
   LoginByPasswordBodySchema,
+  FeishuOrgLoginStartQuerySchema,
+  FeishuOrgLoginCallbackQuerySchema,
   PreLoginQuerySchema,
   PreLoginResponseSchema,
   OauthLoginBodySchema,
@@ -25,6 +27,22 @@ import {
 } from './api';
 
 export const LoginPath: OpenAPIPath = {
+  '/support/user/account/login/feishu/start': {
+    get: {
+      summary: '开始飞书组织登录',
+      tags: [DevApiTagsMap.userLogin],
+      requestParams: { query: FeishuOrgLoginStartQuerySchema },
+      responses: { 302: { description: '跳转到飞书授权页' } }
+    }
+  },
+  '/support/user/account/login/feishu/callback': {
+    get: {
+      summary: '完成飞书组织登录',
+      tags: [DevApiTagsMap.userLogin],
+      requestParams: { query: FeishuOrgLoginCallbackQuerySchema },
+      responses: { 303: { description: '跳转到 FastGPT' } }
+    }
+  },
   '/support/user/account/login/verification/config': {
     get: {
       summary: '获取登录二次验证开关（Pro 内部接口）',

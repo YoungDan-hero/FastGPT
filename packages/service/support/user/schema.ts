@@ -5,6 +5,8 @@ import { UserTagsSchema, type UserModelSchema } from '@fastgpt/global/support/us
 import { UserStatusEnum, userStatusMap } from '@fastgpt/global/support/user/constant';
 import { TeamMemberCollectionName } from '@fastgpt/global/support/user/team/constant';
 import { LangEnum } from '@fastgpt/global/common/i18n/type';
+import { UserError } from '@fastgpt/global/common/error/utils';
+import { getProtectedFeishuAdminUsername } from './feishu/identity';
 
 export const userCollectionName = 'users';
 
@@ -64,8 +66,38 @@ const UserSchema = new Schema({
     enum: UserTagsSchema.enum
   },
   meta: Object,
+  feishuOrg: {
+    type: new Schema(
+      {
+        appId: { type: String, required: true },
+        teamId: { type: Schema.Types.ObjectId, required: true },
+        nickname: String,
+        checkedAt: { type: Date, default: null },
+        revokedAt: Date
+      },
+      { _id: false }
+    ),
+    select: false
+  },
   /** @deprecated */
   avatar: String
+});
+
+UserSchema.pre(['deleteOne', 'deleteMany', 'findOneAndDelete'], async function () {
+  const username = getProtectedFeishuAdminUsername();
+  if (!username) return;
+
+  const protectedUser = await this.model
+    .exists({ $and: [this.getFilter(), { username }] })
+    .session(this.getOptions().session ?? null);
+  if (protectedUser) throw new UserError('受保护的飞书管理员不能删除');
+});
+
+UserSchema.pre('deleteOne', { document: true, query: false }, async function () {
+  const username = getProtectedFeishuAdminUsername();
+  if (username && (await MongoUser.exists({ _id: this._id, username }).session(this.$session()))) {
+    throw new UserError('受保护的飞书管理员不能删除');
+  }
 });
 
 // username 唯一。
@@ -77,5 +109,9 @@ defineIndex(UserSchema, {
 defineIndex(UserSchema, { key: { status: 1, _id: -1 } });
 // Admin charts
 defineIndex(UserSchema, { key: { createTime: -1 } });
+defineIndex(UserSchema, {
+  key: { 'feishuOrg.teamId': 1, 'feishuOrg.appId': 1 },
+  options: { partialFilterExpression: { 'feishuOrg.appId': { $exists: true } } }
+});
 
 export const MongoUser = getMongoModel<UserModelSchema>(userCollectionName, UserSchema);

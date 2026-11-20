@@ -1,3 +1,4 @@
+import { isSystemAdminUser } from '@fastgpt/global/support/user/utils';
 import React, { useCallback, useMemo } from 'react';
 import { useSystemStore } from '@/web/common/system/useSystemStore';
 import { useRouter } from 'next/router';
@@ -48,13 +49,17 @@ const AccountContainer = ({
       label: t('account:personal_information'),
       value: TabEnum.info
     },
-    ...(feConfigs?.isPlus
+    ...(feConfigs?.isPlus || (feConfigs?.feishuOrgLogin && isSystemAdminUser(userInfo))
       ? [
           {
             icon: 'support/user/usersLight',
             label: t('account:team'),
             value: TabEnum.team
-          },
+          }
+        ]
+      : []),
+    ...(feConfigs?.isPlus
+      ? [
           {
             icon: 'support/usage/usageRecordLight',
             label: t('account:usage_records'),
@@ -139,14 +144,14 @@ const AccountContainer = ({
         openConfirm({
           onConfirm: () => {
             setUserInfo(null);
-            router.replace('/login');
+            router.replace(feConfigs?.feishuOrgLogin ? '/login?loggedOut=1' : '/login');
           }
         })();
       } else {
         router.replace('/account/' + tab);
       }
     },
-    [openConfirm, router, setUserInfo]
+    [feConfigs?.feishuOrgLogin, openConfirm, router, setUserInfo]
   );
 
   return (

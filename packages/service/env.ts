@@ -59,6 +59,13 @@ export const serviceEnv = createEnv({
     FEISHU_BASE_URL: UrlSchema.default('https://open.feishu.cn').meta({
       description: '飞书开放平台基础地址，私有化部署可覆盖，默认使用官方地址'
     }),
+    FEISHU_ORG_ENABLED: BoolSchema.default(false),
+    FEISHU_ORG_APP_ID: z.string().min(1).optional(),
+    FEISHU_ORG_APP_SECRET: z.string().min(1).optional(),
+    FEISHU_ORG_PROTECTED_ADMIN_OPEN_ID: z
+      .string()
+      .regex(/^ou_[A-Za-z0-9_-]+$/)
+      .optional(),
     DINGTALK_BASE_URL: UrlSchema.default('https://api.dingtalk.com').meta({
       description: '钉钉 API 基础地址，默认使用官方地址'
     }),

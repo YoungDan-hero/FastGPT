@@ -1,5 +1,6 @@
 import { teamDeleteProcessor } from './processor';
 import { teamDeleteMQService, type TeamDeleteJobData } from '@fastgpt/dal/redis/bullmq';
+import { assertFeishuAdminTeamCanBeDeleted } from '../../feishu/member';
 
 export type { TeamDeleteJobData } from '@fastgpt/dal/redis/bullmq';
 
@@ -9,4 +10,7 @@ export const initTeamDeleteWorker = () => {
 };
 
 // 添加删除任务
-export const addTeamDeleteJob = (data: TeamDeleteJobData) => teamDeleteMQService.addJob(data);
+export const addTeamDeleteJob = async (data: TeamDeleteJobData) => {
+  await assertFeishuAdminTeamCanBeDeleted(data.teamId);
+  return teamDeleteMQService.addJob(data);
+};

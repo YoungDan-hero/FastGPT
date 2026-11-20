@@ -31,11 +31,25 @@ export type UserModelSchema = {
   contact?: string | null;
   tags: UserTagsType[];
   meta?: UserMetaType;
+  feishuOrg?: {
+    appId: string;
+    teamId: string;
+    checkedAt: Date | null;
+    revokedAt?: Date;
+    nickname?: string | null;
+  };
 };
 
 export const UserSchema = z.object({
   _id: ObjectIdSchema,
   username: z.string(),
+  isSystemAdmin: z.boolean().optional(),
+  feishuProfile: z
+    .object({
+      nickname: z.string().optional(),
+      departmentNames: z.array(z.string())
+    })
+    .optional(),
   avatar: z.string().nullish(),
   timezone: z.string(),
   language: LanguageSchema.optional(),

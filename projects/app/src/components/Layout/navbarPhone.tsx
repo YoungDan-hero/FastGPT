@@ -1,3 +1,4 @@
+import { isSystemAdminUser } from '@fastgpt/global/support/user/utils';
 import React, { useMemo } from 'react';
 import { useRouter } from 'next/router';
 import { Flex, Box } from '@chakra-ui/react';
@@ -66,7 +67,7 @@ const NavbarPhone = ({ unread }: { unread: number }) => {
         ],
         unread
       },
-      ...(userInfo?.username === 'root'
+      ...(isSystemAdminUser(userInfo)
         ? [
             {
               label: t('common:navbar.Config'),
@@ -80,7 +81,7 @@ const NavbarPhone = ({ unread }: { unread: number }) => {
           ]
         : [])
     ],
-    [lastChatAppId, lastPane, t, unread, userInfo?.username]
+    [lastChatAppId, lastPane, t, unread, userInfo?.username, userInfo?.isSystemAdmin]
   );
 
   return (

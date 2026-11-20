@@ -58,6 +58,7 @@ import { buildChatSourceQuery } from '@fastgpt/service/core/chat/source';
 import { APP_SANDBOX_ENABLED_CHAT_METADATA_KEY } from '@fastgpt/global/core/ai/sandbox/constants';
 import { isAppSandboxEnabledInNodes } from '@fastgpt/global/common/app/workflow';
 import { prepareAppWorkflowResources } from '@fastgpt/service/core/app/resource/service';
+import { serviceEnv } from '@fastgpt/service/env';
 
 async function handler(req: NextApiRequest, res: NextApiResponse) {
   let streamResponseContext: WorkflowStreamResponseContext | undefined;
@@ -102,7 +103,12 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       tmbId,
       isRoot
     });
-    const resourceContext = createWorkflowResourceContext({ resources, teamId, isRoot });
+    const resourceContext = createWorkflowResourceContext({
+      resources,
+      teamId,
+      isRoot,
+      allowFeishuKnowledgeWrite: serviceEnv.FEISHU_ORG_ENABLED
+    });
 
     // 类型获取
     const isPlugin = app.type === AppTypeEnum.workflowTool;

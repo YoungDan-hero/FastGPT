@@ -49,6 +49,7 @@ import { getWorkflowRuntimeSummary } from '@fastgpt/service/core/workflow/dispat
 import { authAppByTmbId } from '@fastgpt/service/support/permission/app/auth';
 import { ReadPermissionVal } from '@fastgpt/global/support/permission/constant';
 import { resolveMcpEffectiveTmbId } from './auth';
+import { assertFeishuOrgMember } from '@fastgpt/service/support/user/feishu/member';
 import { assertCancellation } from '@fastgpt/service/support/user/account/cancellation/guard';
 import { markProfileError, profileStage, setProfileMeta } from '@fastgpt/service/common/profiling';
 import { createWorkflowResourceContext } from '@fastgpt/service/core/workflow/resource/context';
@@ -472,6 +473,7 @@ export const callMcpServerTool = async ({ key, toolName, inputs, authProxy }: to
   const effectiveTmbId = await profileStage({ event: 'identity.resolve' }, () =>
     resolveMcpEffectiveTmbId({ mcp, authProxy })
   );
+  await assertFeishuOrgMember({ teamId: String(mcp.teamId), tmbId: effectiveTmbId });
   await profileStage({ event: 'app.auth', params: { appId: String(app._id) } }, () =>
     authAppByTmbId({
       tmbId: effectiveTmbId,

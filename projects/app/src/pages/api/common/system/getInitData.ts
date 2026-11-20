@@ -110,6 +110,7 @@ async function handler(
       docUrl: config.docUrl
     };
     const loginConfig = {
+      feishuOrgLogin: config.feishuOrgLogin,
       login_method: config.login_method,
       register_method: config.register_method,
       find_password_method: config.find_password_method,

@@ -1,3 +1,4 @@
+import { isSystemAdminUser } from '@fastgpt/global/support/user/utils';
 import { serviceSideProps } from '@/web/common/i18n/utils';
 import React, { useEffect } from 'react';
 import { useRouter } from 'next/router';
@@ -20,7 +21,7 @@ const AdminEntryPage = () => {
   const router = useRouter();
   const { feConfigs, licenseData, licenseLoading, initd } = useSystemStore();
   const { userInfo } = useUserStore();
-  const isRoot = userInfo?.username === 'root';
+  const isRoot = isSystemAdminUser(userInfo);
   const isProService = !!feConfigs?.isProService;
 
   useEffect(() => {

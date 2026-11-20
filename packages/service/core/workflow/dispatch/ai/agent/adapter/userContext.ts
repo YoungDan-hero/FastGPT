@@ -41,7 +41,7 @@ export const loadAgentDatasetContext = async (
     (id) => !hasWorkflowResource({ context: resourceContext, type: 'dataset', id })
   );
   let authorizedDatasetIds = datasetIds;
-  if (authTmbId) {
+  if (authTmbId || serviceEnv.FEISHU_ORG_ENABLED) {
     authorizedDatasetIds = await filterDatasetsByTmbId({
       datasetIds,
       tmbId
@@ -206,3 +206,4 @@ export const useUserContext = async ({
     }
   };
 };
+import { serviceEnv } from '../../../../../../env';

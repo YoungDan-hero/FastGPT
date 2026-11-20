@@ -1,4 +1,5 @@
 import React, { useCallback } from 'react';
+import type { GetServerSideProps } from 'next';
 import { useRouter } from 'next/router';
 import { clearToken } from '@/web/support/user/auth';
 import { useMount } from 'ahooks';
@@ -9,6 +10,8 @@ import { validateRedirectUrl } from '@/web/common/utils/uri';
 import type { LoginSuccessResponseType } from '@fastgpt/global/openapi/support/user/account/login/api';
 import { useLoginRedirectAfterLogin } from '@/web/support/user/loginRedirect';
 import { resetUserModelCatalogAfterLogin } from '@/web/core/ai/model/useUserModelStore';
+import { getFeishuLoginStartPath } from '@/web/support/user/loginRedirect/url';
+import { serviceEnv } from '@fastgpt/service/env';
 
 const Login = () => {
   const router = useRouter();
@@ -58,3 +61,18 @@ const Login = () => {
 };
 
 export default Login;
+
+export const getServerSideProps: GetServerSideProps = async ({ query }) => {
+  const { rootLogin, feishuError, loggedOut, lastRoute } = query;
+  // 登录失败和主动退出停在本地页面，避免立刻发起下一次授权。
+  if (
+    !serviceEnv.FEISHU_ORG_ENABLED ||
+    rootLogin === '1' ||
+    feishuError === '1' ||
+    loggedOut === '1'
+  ) {
+    return { props: {} };
+  }
+
+  return { redirect: { destination: getFeishuLoginStartPath(lastRoute), permanent: false } };
+};

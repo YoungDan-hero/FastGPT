@@ -5,6 +5,7 @@ import { notLeaveStatus } from '@fastgpt/global/support/user/team/constant';
 import { ApiKeyTypeEnum } from '@fastgpt/global/support/openapi/constants';
 import { MongoUser } from '../../support/user/schema';
 import { MongoTeamMember } from '../../support/user/team/teamMemberSchema';
+import { assertFeishuOrgMember } from '../../support/user/feishu/member';
 
 /**
  * 解析所有 Chat 请求的有效成员；普通身份保留凭证成员，代理身份返回同团队在职成员及用户 ID。
@@ -75,6 +76,7 @@ export const resolveChatProxyMember = async ({
   if (!member) {
     return Promise.reject(ChatErrEnum.unAuthChat);
   }
+  await assertFeishuOrgMember({ teamId, tmbId: String(member._id), userId: String(member.userId) });
 
   return {
     tmbId: String(member._id),

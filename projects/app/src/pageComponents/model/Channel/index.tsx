@@ -1,3 +1,4 @@
+import { isSystemAdminUser } from '@fastgpt/global/support/user/utils';
 import {
   deleteChannel,
   getAffectedModels,
@@ -60,7 +61,7 @@ const ChannelTable = ({ Tab, channelType }: { Tab: React.ReactNode; channelType:
   const { toast } = useToast();
   const { userInfo } = useUserStore();
 
-  const isRoot = userInfo?.username === 'root';
+  const isRoot = isSystemAdminUser(userInfo);
   const [search, setSearch] = useState('');
 
   const {

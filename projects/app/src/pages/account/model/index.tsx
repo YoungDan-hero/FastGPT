@@ -1,3 +1,4 @@
+import { isSystemAdminUser } from '@fastgpt/global/support/user/utils';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Box, Flex } from '@chakra-ui/react';
 import { useRouter } from 'next/router';
@@ -21,7 +22,7 @@ const ModelProvider = () => {
   const { toast } = useToast();
   const router = useRouter();
 
-  const isRoot = userInfo?.username === 'root';
+  const isRoot = isSystemAdminUser(userInfo);
   const canManageModel = Boolean(isRoot || userInfo?.team?.permission?.hasModelCreatePer);
   const isTeamOwner = Boolean(
     isRoot ||

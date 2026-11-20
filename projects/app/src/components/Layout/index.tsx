@@ -1,3 +1,4 @@
+import { isSystemAdminUser } from '@fastgpt/global/support/user/utils';
 import React, { useEffect, useMemo, useRef } from 'react';
 import { Box } from '@chakra-ui/react';
 import { useRouter } from 'next/router';
@@ -95,7 +96,7 @@ const Layout = ({ children }: { children: JSX.Element }) => {
 
   useInvitationResultToast();
 
-  const isRoot = userInfo?.username === 'root';
+  const isRoot = isSystemAdminUser(userInfo);
   // /admin 区域外的路由（工作台、知识库、对话等）属于开源版本体，不受 License 状态影响
   const isAdminRoute = router.pathname.startsWith('/admin/');
 

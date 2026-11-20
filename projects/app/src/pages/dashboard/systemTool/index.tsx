@@ -1,5 +1,6 @@
 'use client';
 
+import { isSystemAdminUser } from '@fastgpt/global/support/user/utils';
 import {
   getTeamSystemPluginList,
   getTeamToolDetail,
@@ -425,7 +426,7 @@ const ToolKitProvider = ({ MenuIcon }: { MenuIcon: JSX.Element }) => {
                 {!loadingTools && (
                   <>
                     <EmptyTip pb={4} />
-                    {userInfo?.username === 'root' && (
+                    {isSystemAdminUser(userInfo) && (
                       <Button
                         onClick={() => {
                           router.push('/admin/resources/tool');

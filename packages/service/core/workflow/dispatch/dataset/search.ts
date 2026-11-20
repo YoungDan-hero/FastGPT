@@ -1,4 +1,5 @@
 import { isProVersion } from '../../../../common/system/constants';
+import { serviceEnv } from '../../../../env';
 import { DatasetErrEnum } from '@fastgpt/global/common/error/code/dataset';
 import { i18nT } from '@fastgpt/global/common/i18n/utils';
 import type { ChatHistoryItemResType } from '@fastgpt/global/core/chat/type';
@@ -147,8 +148,9 @@ export const dispatchDatasetSearch = async (
   }
 
   try {
+    const checkMember = authTmbId || serviceEnv.FEISHU_ORG_ENABLED;
     const requestedDatasetIds = datasets.map((item) => item.datasetId);
-    const datasetIds = authTmbId
+    const datasetIds = checkMember
       ? await filterDatasetsByTmbId({
           datasetIds: requestedDatasetIds,
           tmbId
@@ -161,7 +163,7 @@ export const dispatchDatasetSearch = async (
 
     // Collection 级权限可读集合仅对真实成员鉴权生效；authTmbId=false（应用内预选 dataset，
     // 无当前用户身份）时不做 collection 级过滤，按 dataset 全量召回。
-    const readableCollectionIdList = authTmbId
+    const readableCollectionIdList = checkMember
       ? await resolveReadableCollectionIds({
           teamId: userInfo.teamId,
           datasetIds,

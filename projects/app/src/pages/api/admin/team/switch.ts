@@ -37,7 +37,14 @@ async function handler(
     req,
     bodySchema: AdminSwitchTeamBodySchema
   });
-  const { userId, teamId: sourceTeamId, sessionId } = await authSystemAdmin({ req });
+  const {
+    userId,
+    teamId: sourceTeamId,
+    sessionId
+  } = await authSystemAdmin({
+    req,
+    nativeRootOnly: true
+  });
 
   // 2. 在目标团队中按需确保存在活跃的 root 成员锚点，跳过成员配额限制。
   const { team, tmb } = await ensureRootTeamMember({

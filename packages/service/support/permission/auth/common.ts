@@ -12,6 +12,8 @@ import { AuthUserTypeEnum } from '@fastgpt/global/support/permission/constant';
 import { serviceEnv } from '../../../env';
 import { getSystemInstanceConfig } from '../../../common/system/systemInstanceConfig/runtime';
 import { ApiKeyTypeEnum } from '@fastgpt/global/support/openapi/constants';
+import { assertFeishuOrgMember } from '../../user/feishu/member';
+import { getProtectedFeishuAdminUsername } from '../../user/feishu/identity';
 
 export const authCert = async (props: AuthModeType) => {
   const result = await parseHeaderCert(props);
@@ -177,6 +179,20 @@ export async function parseHeaderCert({
   if (!authRoot && (!teamId || !tmbId)) {
     return Promise.reject(ERROR_ENUM.unAuthorization);
   }
+  let isSystemAdmin = !!isRoot;
+  if (serviceEnv.FEISHU_ORG_ENABLED && !isRoot && apiKeyType !== ApiKeyTypeEnum.app) {
+    const username = await assertFeishuOrgMember({
+      userId: String(uid),
+      teamId: String(teamId),
+      tmbId: String(tmbId),
+      sessionCreatedAt
+    });
+    // 飞书仍是账号有效性的来源，管理员身份只在有效网页会话中授予。
+    isSystemAdmin =
+      authType === AuthUserTypeEnum.token &&
+      typeof username === 'string' &&
+      username === getProtectedFeishuAdminUsername();
+  }
 
   // 系统 root 代管进入处于注销冷静期的租户团队时需允许正常排查与管理，不受租户注销门禁阻断。
   const shouldAssertCancellation =
@@ -205,7 +221,7 @@ export async function parseHeaderCert({
     apiKeyType,
     boundAppId,
     apikey: openApiKey,
-    isRoot: !!isRoot,
+    isRoot: isSystemAdmin,
     sessionId,
     sessionCreatedAt
   };

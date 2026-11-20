@@ -31,6 +31,18 @@ import { checkStrOversize, logOversizeString } from '../../../../common/string/r
 import { getWorkflowAppId } from '../utils/source';
 import { getErrText, isUserConfigError, UserConfigError } from '@fastgpt/global/common/error/utils';
 import { getSafeHttpErrorLog } from '../../../../common/api/httpError';
+import { serviceEnv } from '../../../../env';
+import { getChatItemTextContent } from '@fastgpt/global/core/chat/utils';
+import { PushDataBodySchema } from '@fastgpt/global/openapi/core/dataset/data/api';
+import { WritePermissionVal } from '@fastgpt/global/support/permission/constant';
+import { AuditEventEnum } from '@fastgpt/global/support/user/audit/constants';
+import { addAuditLog } from '../../../../support/user/audit/util';
+import { wantsKnowledgeWrite } from '../../../../support/user/feishu/knowledgeIntent';
+import { assertFeishuOrgMember } from '../../../../support/user/feishu/member';
+import { authDatasetCollectionByTmbId } from '../../../../support/permission/dataset/auth';
+import { pushDatasetData } from '../../../dataset/data/pushData';
+import { hasWorkflowResource } from '../../resource/context';
+import { getWorkflowResourceContext } from '../../utils/context';
 
 const logger = getLogger(LogCategories.MODULE.WORKFLOW.TOOLS);
 
@@ -105,6 +117,7 @@ type HttpResponse = DispatchNodeResultType<
 >;
 
 const UNDEFINED_SIGN = 'UNDEFINED_SIGN';
+const localKnowledgeWritePath = '/api/core/dataset/data/pushData';
 
 /**
  * 执行用户配置的 HTTP 请求，配置校验和请求失败使用 UserConfigError 降低系统观测噪声。
@@ -276,14 +289,63 @@ export const dispatchHttp468Request = async (props: HttpRequestProps): Promise<H
 
   try {
     // 只转换请求边界的失败，避免将后续输出处理中的内部异常一起降级。
-    const { formatResponse, rawResponse } = await fetchData({
-      method: httpMethod,
-      url: requestUrl,
-      headers: { ...sensitiveHeaders, ...publicHeaders },
-      body: requestBody,
-      params,
-      timeout: httpTimeout
-    }).catch((error: unknown) => {
+    const { formatResponse, rawResponse } = await (async () => {
+      if (
+        serviceEnv.FEISHU_ORG_ENABLED &&
+        /\/api\/core\/dataset\/data\/pushData\/?(?:[?#]|$)/.test(requestUrl)
+      ) {
+        if (
+          httpReqUrl !== localKnowledgeWritePath ||
+          requestUrl !== localKnowledgeWritePath ||
+          httpMethod.toUpperCase() !== 'POST'
+        ) {
+          throw new UserConfigError(`请使用 POST ${localKnowledgeWritePath} 作为写库节点地址`);
+        }
+        const context = getWorkflowResourceContext();
+        const { teamId, tmbId } = props.runningUserInfo;
+        if (
+          !context?.allowFeishuKnowledgeWrite ||
+          !wantsKnowledgeWrite(getChatItemTextContent(props.query))
+        ) {
+          throw new UserConfigError('请在已登录的会话中明确发出沉淀指令');
+        }
+        await assertFeishuOrgMember({ teamId, tmbId });
+        const body = PushDataBodySchema.omit({ billId: true }).parse(requestBody);
+        const actor = await authDatasetCollectionByTmbId({
+          teamId,
+          tmbId,
+          collectionId: body.collectionId,
+          per: WritePermissionVal
+        });
+        const { collection } = actor;
+        if (!hasWorkflowResource({ context, type: 'dataset', id: String(collection.datasetId) })) {
+          throw new UserConfigError('写入目标必须属于当前工作流绑定的知识库');
+        }
+        const result = await pushDatasetData(body, actor);
+        if (result.insertLen) {
+          await addAuditLog({
+            teamId,
+            tmbId,
+            event: AuditEventEnum.CREATE_DATA,
+            params: {
+              collectionName: collection.name,
+              datasetName: collection.dataset.name,
+              datasetType: collection.dataset.type
+            }
+          });
+        }
+        const response = { code: 200, data: result };
+        return { formatResponse: response, rawResponse: response };
+      }
+      return fetchData({
+        method: httpMethod,
+        url: requestUrl,
+        headers: { ...sensitiveHeaders, ...publicHeaders },
+        body: requestBody,
+        params,
+        timeout: httpTimeout
+      });
+    })().catch((error: unknown) => {
       throw new UserConfigError(getErrText(error), undefined, { cause: error });
     });
 

@@ -1,3 +1,4 @@
+import { isSystemAdminUser } from '@fastgpt/global/support/user/utils';
 import {
   Box,
   Flex,
@@ -198,7 +199,7 @@ const ModelTable = ({ Tab, channelType }: { Tab: React.ReactNode; channelType: C
     loading: loadingModels
   } = useModelConfig({ channelType, language: i18n.language });
 
-  const isRoot = userInfo?.username === 'root';
+  const isRoot = isSystemAdminUser(userInfo);
 
   const [provider, setProvider] = useState<string | ''>('');
   const [modelType, setModelType] = useState<ModelTypeEnum | ''>('');

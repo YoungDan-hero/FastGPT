@@ -2,6 +2,8 @@ import type { OpenAPIPath } from '../../../../type';
 import { DevApiTagsMap } from '../../../../tag';
 import {
   CreateOrgBodySchema,
+  FeishuAccessBodySchema,
+  FeishuAccessResponseSchema,
   DeleteOrgMemberQuerySchema,
   DeleteOrgQuerySchema,
   ListOrgBodySchema,
@@ -14,6 +16,24 @@ import {
 const DepartmentTags = [DevApiTagsMap.teamOrg];
 
 export const TeamOrgPath: OpenAPIPath = {
+  '/support/user/team/feishu/access': {
+    get: {
+      summary: '获取飞书部门、员工及可授权资源',
+      tags: DepartmentTags,
+      responses: {
+        200: {
+          description: '公司团队的权限配置选项',
+          content: { 'application/json': { schema: FeishuAccessResponseSchema } }
+        }
+      }
+    },
+    post: {
+      summary: '设置飞书部门或员工的资源角色',
+      tags: DepartmentTags,
+      requestBody: { content: { 'application/json': { schema: FeishuAccessBodySchema } } },
+      responses: { 200: { description: '授权已更新' } }
+    }
+  },
   '/proApi/support/user/team/org/create': {
     post: {
       summary: '创建部门',

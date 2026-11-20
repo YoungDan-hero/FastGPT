@@ -1,6 +1,9 @@
 import { authDatasetByTmbId } from '../../support/permission/dataset/auth';
 import { getTmbInfoByTmbId } from '../../support/user/team/controller';
 import { getWorkflowResourceContext } from '../workflow/utils/context';
+import { hasWorkflowResource } from '../workflow/resource/context';
+import { serviceEnv } from '../../env';
+import { assertFeishuOrgMember } from '../../support/user/feishu/member';
 import { ReadPermissionVal } from '@fastgpt/global/support/permission/constant';
 import { getLogger, LogCategories } from '../../common/logger';
 import { isImageEmbeddingModel } from '@fastgpt/global/core/ai/model/utils';
@@ -26,6 +29,10 @@ export const filterDatasetsByTmbId = async ({
   let tmbInfo: Awaited<ReturnType<typeof getTmbInfoByTmbId>> | undefined;
   try {
     tmbInfo = await getTmbInfoByTmbId({ tmbId });
+    if (serviceEnv.FEISHU_ORG_ENABLED) {
+      await assertFeishuOrgMember({ tmbId, teamId: tmbInfo.teamId });
+      datasetIds = datasetIds.filter((id) => hasWorkflowResource({ context, type: 'dataset', id }));
+    }
   } catch (error) {
     logger.warn('Dataset access denied for member', { tmbId, error });
     return [];

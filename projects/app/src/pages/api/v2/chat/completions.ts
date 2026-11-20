@@ -416,7 +416,8 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       chatConfig,
       resourceContext: createWorkflowResourceContext({
         resources,
-        teamId
+        teamId,
+        allowFeishuKnowledgeWrite: authType === 'token'
       }),
       histories: newHistories,
       stream,

@@ -1,6 +1,7 @@
 import { createServer, request, type IncomingMessage, type Server } from 'node:http';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { getProtectedFeishuAdminUsername } from '@fastgpt/service/support/user/feishu/identity';
 
 // 这里需要真实的响应管线；全局 API/JSON mock 会隐藏代理被追加 JSON 的回归。
 vi.unmock('@fastgpt/service/common/http/entry');
@@ -8,6 +9,14 @@ vi.unmock('@fastgpt/service/common/response');
 vi.unmock('@fastgpt/service/common/logger');
 vi.mock('@fastgpt/service/common/system/constants', () => ({
   FastGPTProUrl: 'https://admin.example.com/api'
+}));
+vi.mock('@fastgpt/service/support/user/feishu/identity', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@fastgpt/service/support/user/feishu/identity')>()),
+  getProtectedFeishuAdminUsername: vi.fn()
+}));
+vi.mock('@fastgpt/service/support/permission/user/auth', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@fastgpt/service/support/permission/user/auth')>()),
+  authSystemAdmin: vi.fn().mockResolvedValue({})
 }));
 
 import handler from '@/pages/api/proApi/[...path]';
@@ -24,11 +33,13 @@ describe('proApi response forwarding', () => {
     method = 'POST',
     headers = {},
     path = '/api/proApi/support/user/account/login/wx/callback?nonce=nonce',
+    payload = '<xml />',
     onChunk
   }: {
     method?: string;
     headers?: Record<string, string>;
     path?: string;
+    payload?: string;
     onChunk?: (response: IncomingMessage) => void;
   } = {}) =>
     new Promise<{ status: number; body: string; contentType?: string; location?: string }>(
@@ -60,7 +71,7 @@ describe('proApi response forwarding', () => {
           }
         );
         client.on('error', reject);
-        client.end(method === 'GET' || method === 'HEAD' ? undefined : '<xml />');
+        client.end(method === 'GET' || method === 'HEAD' ? undefined : payload);
       }
     );
 
@@ -103,6 +114,7 @@ describe('proApi response forwarding', () => {
 
   beforeEach(() => {
     fetchUpstream.mockReset();
+    vi.mocked(getProtectedFeishuAdminUsername).mockReset();
     jsonResponses.length = 0;
     handlerErrors.length = 0;
     vi.stubGlobal('fetch', fetchUpstream);
@@ -128,6 +140,31 @@ describe('proApi response forwarding', () => {
     expect(response.body).toBe('success');
     expect(jsonResponses).toEqual([]);
     expect(handlerErrors).toEqual([]);
+  });
+
+  it('blocks deletion of the protected account without forwarding its request', async () => {
+    vi.mocked(getProtectedFeishuAdminUsername).mockReturnValue('feishu-protected-test');
+    const path = '/api/proApi/admin/user/delete';
+    const headers = { 'Content-Type': 'application/json' };
+    const blocked = await sendRequest({
+      path,
+      headers,
+      payload: JSON.stringify({ username: 'feishu-protected-test' })
+    });
+    expect(blocked.status).toBe(403);
+    expect(fetchUpstream).not.toHaveBeenCalled();
+
+    fetchUpstream.mockImplementation(async (request) => {
+      expect(request).toBeInstanceOf(Request);
+      expect(await (request as Request).json()).toEqual({ username: 'ordinary' });
+      return new Response(null, { status: 204 });
+    });
+    const ordinary = await sendRequest({
+      path,
+      headers,
+      payload: JSON.stringify({ username: 'ordinary' })
+    });
+    expect(ordinary.status).toBe(204);
   });
 
   it('preserves the storage origin for Pro file redirects', async () => {

@@ -18,6 +18,7 @@ import { addAuditLog } from '../../audit/util';
 import { AuditEventEnum } from '@fastgpt/global/support/user/audit/constants';
 import type { NodeHttpRequest, NodeHttpResponse } from '../../../../types/http';
 import { MongoUser } from '../../schema';
+import { serviceEnv } from '../../../../env';
 
 /**
  * 登录流程内部传递的用户文档类型。
@@ -32,6 +33,9 @@ export type PasswordLoginUser = Omit<PasswordVerificationUser, 'password'>;
  * 该检查必须发生在创建登录 Challenge 之前，避免禁用账号获得可继续使用的 Challenge。
  */
 export const assertPasswordLoginUser = async ({ user }: { user: PasswordLoginUser }) => {
+  if (serviceEnv.FEISHU_ORG_ENABLED && user.username !== 'root') {
+    throw new UserError('请使用飞书登录');
+  }
   if (user.status === UserStatusEnum.forbidden) {
     return Promise.reject('Invalid account!');
   }

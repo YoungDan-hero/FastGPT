@@ -9,6 +9,8 @@ import { getScheduleTriggerApp } from '@/service/core/app/utils';
 import { cronJob as sandboxCronJob } from '@fastgpt/service/core/ai/sandbox/application/cron';
 import { clearExpiredS3FilesCron } from '@fastgpt/service/common/s3/lifecycle/cleanup';
 import { checkAndRunModelStatusProbe } from '@fastgpt/service/core/ai/modelStatus/service';
+import { serviceEnv } from '@fastgpt/service/env';
+import { refreshFeishuOrganization } from '@fastgpt/service/support/user/feishu/sync';
 
 // Try to run train every minute
 const setTrainingQueueCron = () => {
@@ -91,4 +93,8 @@ export const startCron = () => {
   clearExpiredS3FilesCron();
   sandboxCronJob();
   modelStatusProbeCron();
+  if (serviceEnv.FEISHU_ORG_ENABLED) {
+    setCron('*/1 * * * *', refreshFeishuOrganization);
+    void refreshFeishuOrganization();
+  }
 };

@@ -51,6 +51,7 @@ export const buildSystemFrontendConfig = (
   });
   const pluginRemoteDebug = context.pluginRemoteDebug ?? false;
   const feConfigs: FastGPTFeConfigsType = {
+    feishuOrgLogin: serviceEnv.FEISHU_ORG_ENABLED || undefined,
     // 权威数据源：优先从 SystemInstanceConfig 读取
     systemTitle: instanceConfig?.site?.name,
     systemDescription: instanceConfig?.site?.description,

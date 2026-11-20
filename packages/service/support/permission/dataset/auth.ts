@@ -211,7 +211,25 @@ export async function authDatasetCollection({
     collection: CollectionWithDatasetType;
   }
 > {
-  const { teamId, tmbId, userId, isRoot: isRootFromHeader } = await parseHeaderCert(props);
+  const actor = await parseHeaderCert(props);
+  return authDatasetCollectionByTmbId({ ...actor, collectionId, per });
+}
+
+export async function authDatasetCollectionByTmbId({
+  collectionId,
+  per = NullPermissionVal,
+  teamId,
+  tmbId,
+  userId = '',
+  isRoot = false
+}: {
+  collectionId: string;
+  per?: number;
+  teamId: string;
+  tmbId: string;
+  userId?: string;
+  isRoot?: boolean;
+}) {
   const collection = await getCollectionWithDataset(collectionId);
 
   if (!collection) {
@@ -225,7 +243,7 @@ export async function authDatasetCollection({
     tmbId,
     datasetId: collection.datasetId,
     per: ReadPermissionVal,
-    isRoot: isRootFromHeader,
+    isRoot,
     tmbInfo
   });
 
@@ -235,14 +253,14 @@ export async function authDatasetCollection({
   }
 
   // 系统 root 用户：与 Dataset 级 isRoot 语义一致，跳过 Collection 级权限解析。
-  if (isRootFromHeader) {
+  if (isRoot) {
     return {
       userId,
       teamId,
       tmbId,
       collection,
       permission: new CollectionPermission({ isOwner: true }),
-      isRoot: isRootFromHeader
+      isRoot
     };
   }
 
@@ -301,7 +319,7 @@ export async function authDatasetCollection({
     tmbId,
     collection,
     permission,
-    isRoot: isRootFromHeader
+    isRoot
   };
 }
 

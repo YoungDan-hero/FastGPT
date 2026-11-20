@@ -165,7 +165,14 @@ describe('getQuoteData handler', () => {
       imageId: undefined
     });
     findByIdCollectionMock.mockResolvedValue(makeCollection());
-    authChatTargetCrudMock.mockResolvedValue({ sourceId: VALID_APP_ID, showCite: true });
+    const actor = {
+      sourceId: VALID_APP_ID,
+      showCite: true,
+      teamId: 'link-team',
+      tmbId: 'link-visitor',
+      isRoot: false
+    };
+    authChatTargetCrudMock.mockResolvedValue(actor);
     authCollectionInChatMock.mockResolvedValue(undefined);
 
     const res = await Call(handler, {
@@ -195,6 +202,7 @@ describe('getQuoteData handler', () => {
     expect(firstCall.outLinkUid).toBeUndefined();
 
     expect(authCollectionInChatMock).toHaveBeenCalledWith({
+      actor,
       sourceType: 'app',
       sourceId: VALID_APP_ID,
       chatId: 'chat_123',

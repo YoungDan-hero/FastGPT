@@ -40,6 +40,7 @@ export async function handler(
     tmbId,
     appId,
     ...props,
+    ...(serviceEnv.FEISHU_ORG_ENABLED && { allowAnonymous: false }),
     ...getNewOutLinkBrandConfig({ enabled: serviceEnv.SHOW_OUTLINK_BRAND, type: props.type })
   });
 

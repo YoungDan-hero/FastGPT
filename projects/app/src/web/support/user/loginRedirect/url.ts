@@ -3,6 +3,14 @@ import { getCurrentAuthTmbId } from '../currentAuthTmbId';
 
 export const LAST_TMB_ID_QUERY_KEY = 'lastTmbId';
 
+/** 生成飞书授权入口，回跳页面由服务端再次校验。 */
+export const getFeishuLoginStartPath = (lastRoute?: string | string[]) => {
+  const path = '/api/support/user/account/login/feishu/start';
+  return typeof lastRoute === 'string' && lastRoute.length > 0 && lastRoute.length <= 2048
+    ? `${path}?${new URLSearchParams({ lastRoute })}`
+    : path;
+};
+
 /**
  * 构造鉴权失败后的登录页地址。
  *

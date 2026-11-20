@@ -285,6 +285,7 @@ const MyInfo = ({ onOpenContact }: { onOpenContact: () => void }) => {
 
   const isSyncMember = getIsMemberSyncMode(feConfigs);
   const memberDisplayName = userInfo?.team?.memberName;
+  const feishuProfile = userInfo?.feishuProfile;
   return (
     <Box>
       {/* user info */}
@@ -297,8 +298,22 @@ const MyInfo = ({ onOpenContact }: { onOpenContact: () => void }) => {
       <Box mt={[0, 6]} fontSize={'sm'}>
         <Flex alignItems={'center'}>
           <Box {...labelStyles}>{t('account_info:user_account')}&nbsp;</Box>
-          <Box flex={1}>{userInfo?.username}</Box>
+          <Box flex={1}>{feishuProfile ? '飞书账号' : userInfo?.username}</Box>
         </Flex>
+        {feishuProfile && (
+          <>
+            <Flex mt={4} alignItems={'center'}>
+              <Box {...labelStyles}>飞书显示名</Box>
+              <Box flex={1}>{memberDisplayName}</Box>
+            </Flex>
+            {userInfo?.isSystemAdmin && (
+              <Flex mt={4} alignItems={'center'}>
+                <Box {...labelStyles}>身份</Box>
+                <Box flex={1}>系统管理员</Box>
+              </Flex>
+            )}
+          </>
+        )}
         {canManagePassword && (
           <Flex mt={4} alignItems={'center'}>
             <Box {...labelStyles}>{t('account_info:password')}&nbsp;</Box>
@@ -340,8 +355,21 @@ const MyInfo = ({ onOpenContact }: { onOpenContact: () => void }) => {
           </Flex>
         )}
 
-        <AvatarUploader />
-        {isPc ? (
+        {!feishuProfile && <AvatarUploader />}
+        {feishuProfile ? (
+          <>
+            <Flex mt={4} alignItems={'center'}>
+              <Box {...labelStyles}>{t('account_info:avatar')}</Box>
+              <Avatar src={userInfo?.avatar} w={'32px'} h={'32px'} borderRadius={'50%'} />
+            </Flex>
+            <Flex mt={4} alignItems={'center'}>
+              <Box {...labelStyles}>{t('account_team:department')}</Box>
+              <Box flex={1}>
+                {feishuProfile.departmentNames.join('、') || '暂无可显示的部门名称'}
+              </Box>
+            </Flex>
+          </>
+        ) : isPc ? (
           <Flex mt={4} alignItems={'center'} cursor={'pointer'}>
             <Box {...labelStyles}>{t('account_info:avatar')}&nbsp;</Box>
 
@@ -393,7 +421,7 @@ const MyInfo = ({ onOpenContact }: { onOpenContact: () => void }) => {
           </Flex>
         )}
 
-        {feConfigs?.isPlus && (
+        {feConfigs?.isPlus && !feishuProfile && (
           <Flex mt={[4, 4]} alignItems={'center'}>
             <Box {...labelStyles}>{t('account_info:member_name')}&nbsp;</Box>
             <Box flex={1}>{memberDisplayName}</Box>
