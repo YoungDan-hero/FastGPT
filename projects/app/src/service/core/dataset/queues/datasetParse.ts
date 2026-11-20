@@ -240,7 +240,11 @@ export const datasetParseQueue = async (): Promise<any> => {
               return {
                 type: DatasetSourceReadTypeEnum.apiFile,
                 sourceId: collection.apiFileId,
-                apiDatasetServer: dataset.apiDatasetServer
+                apiDatasetServer: dataset.apiDatasetServer,
+                apiDatasetOptions: {
+                  feishuSourceUrl: collection.feishuSourceUrl,
+                  feishuActor: { teamId: String(dataset.teamId), tmbId: String(dataset.tmbId) }
+                }
               };
             }
             if (collection.type === DatasetCollectionTypeEnum.externalFile) {
@@ -283,6 +287,7 @@ export const datasetParseQueue = async (): Promise<any> => {
               : undefined,
             usageId: data.billId,
             datasetId: data.datasetId,
+            imageIndex: trainingMode === TrainingModeEnum.image,
             ...sourceReadType
           });
 

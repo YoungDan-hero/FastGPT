@@ -8,7 +8,7 @@ import {
 import { DatasetCollectionTypeEnum } from '../../../../core/dataset/constants';
 import { ParentIdSchema } from '../../../../common/parentFolder/type';
 import { ObjectIdSchema } from '../../../../common/type/mongo';
-import { APIFileItemSchema } from '../../../../core/dataset/apiDataset/type';
+import { APIFileItemSchema, FeishuSourceUrlSchema } from '../../../../core/dataset/apiDataset/type';
 import { BoolSchema } from '../../../../common/zod';
 
 /* ============================================================================
@@ -167,6 +167,7 @@ export type CreateApiCollectionBodyType = z.infer<typeof CreateApiCollectionBody
  * Route: POST /core/dataset/collection/create/apiCollectionV2
  * ============================================================================ */
 export const CreateApiCollectionV2BodySchema = ApiCreateCollectionRequestBaseSchema.extend({
+  feishuSourceUrl: FeishuSourceUrlSchema.optional(),
   // 覆盖基础 schema 的描述：api 文件库的落位一律由 server 层级推导（本地树镜像 server 树），
   // 该字段服务端不读，仅为兼容保留
   parentId: ParentIdSchema.optional().meta({

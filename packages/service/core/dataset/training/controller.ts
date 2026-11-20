@@ -23,6 +23,7 @@ import { isS3ObjectKey, removeS3TTL } from '../../../common/s3/utils';
 import { getDatasetSynonymTransformContext } from '../synonym/entity';
 import { DatasetDataIndexStatusEnum } from '@fastgpt/global/core/dataset/data/constants';
 import { serviceEnv } from '../../../env';
+import { isProVersion } from '../../../common/system/constants';
 
 const logger = getLogger(LogCategories.MODULE.DATASET.TRAINING);
 
@@ -65,6 +66,10 @@ const getTrainingModeLimit = async ({
     };
   }
   if (mode === TrainingModeEnum.image || mode === TrainingModeEnum.imageParse) {
+    // 社区版文档图片阶段只向视觉模型提交图片，正文长度不能导致丢块。
+    if (mode === TrainingModeEnum.image && !isProVersion() && vlmModelConfigured) {
+      return { maxToken: Infinity, weight: 0 };
+    }
     const vllmModelData = vlmModel;
     if (!vlmModelConfigured) {
       if (mode === TrainingModeEnum.image && isImageEmbeddingModel(vectorModel)) {
@@ -231,6 +236,8 @@ export const pushDataListToTrainingQueue = async ({
   billId,
   mode = TrainingModeEnum.index,
   indexSize,
+  autoIndexes,
+  imageIndex,
   session
 }: {
   teamId: string;
@@ -248,6 +255,8 @@ export const pushDataListToTrainingQueue = async ({
   vlmModelConfigured?: boolean;
 
   indexSize?: number;
+  autoIndexes?: boolean;
+  imageIndex?: boolean;
 
   billId: string;
   session?: ClientSession;
@@ -311,6 +320,8 @@ export const pushDataListToTrainingQueue = async ({
             ...(item.metadata && { dataMetadata: item.metadata }),
             chunkIndex: item.chunkIndex ?? 0,
             indexSize,
+            autoIndexes,
+            imageIndex,
             weight:
               itemMode === TrainingModeEnum.index ? vectorModelData.config.weight : (weight ?? 0),
             indexes: item.indexes,
@@ -417,6 +428,8 @@ export const preCreateDatasetDataAndPushToTrainingQueue = async ({
   billId,
   mode = TrainingModeEnum.index,
   indexSize,
+  autoIndexes,
+  imageIndex,
   session
 }: {
   teamId: string;
@@ -433,6 +446,8 @@ export const preCreateDatasetDataAndPushToTrainingQueue = async ({
   vlmModelConfigured?: boolean;
 
   indexSize?: number;
+  autoIndexes?: boolean;
+  imageIndex?: boolean;
 
   billId: string;
   session: ClientSession;
@@ -507,6 +522,8 @@ export const preCreateDatasetDataAndPushToTrainingQueue = async ({
     data: dataWithIds,
     mode,
     indexSize,
+    autoIndexes,
+    imageIndex,
     billId,
     session
   });

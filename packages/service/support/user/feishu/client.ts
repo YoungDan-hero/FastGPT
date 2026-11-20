@@ -14,7 +14,7 @@ export function getFeishuOrgCredentials() {
 export async function feishuRequest<T extends z.ZodType>(
   path: string,
   schema: T,
-  { token, body }: { token?: string; body?: Record<string, string> } = {}
+  { token, body }: { token?: string; body?: Record<string, unknown> } = {}
 ): Promise<z.infer<T>> {
   const response = await fetch(`${api}${path}`, {
     method: body ? 'POST' : 'GET',
@@ -42,8 +42,7 @@ export async function feishuRequest<T extends z.ZodType>(
   return result.data;
 }
 
-export async function getFeishuTenantToken() {
-  const { appId, secret } = getFeishuOrgCredentials();
+export async function getFeishuTenantToken({ appId, secret } = getFeishuOrgCredentials()) {
   const result = await feishuRequest(
     '/auth/v3/tenant_access_token/internal',
     z.object({ tenant_access_token: z.string().min(1) }),
@@ -52,7 +51,24 @@ export async function getFeishuTenantToken() {
   return result.tenant_access_token;
 }
 
-export async function getFeishuLoginOpenId({
+const FeishuUserTokenSchema = z.object({
+  access_token: z.string().min(1),
+  expires_in: z.number().int().positive(),
+  refresh_token: z.string().min(1).optional(),
+  refresh_token_expires_in: z.number().int().nonnegative().optional()
+});
+export type FeishuUserToken = z.infer<typeof FeishuUserTokenSchema>;
+
+/** 换取用户凭据，应用密钥只在服务端使用。 */
+export async function requestFeishuUserToken(grant: Record<string, string>) {
+  const { appId, secret } = getFeishuOrgCredentials();
+  return feishuRequest('/authen/v2/oauth/token', FeishuUserTokenSchema, {
+    body: { ...grant, client_id: appId, client_secret: secret }
+  });
+}
+
+/** 查验授权账号，并返回本次授权的凭据供文档读取流程使用。 */
+export async function getFeishuLoginAccount({
   code,
   verifier,
   redirectUri
@@ -61,25 +77,16 @@ export async function getFeishuLoginOpenId({
   verifier: string;
   redirectUri: string;
 }) {
-  const { appId, secret } = getFeishuOrgCredentials();
-  const { access_token } = await feishuRequest(
-    '/authen/v2/oauth/token',
-    z.object({ access_token: z.string().min(1) }),
-    {
-      body: {
-        grant_type: 'authorization_code',
-        client_id: appId,
-        client_secret: secret,
-        code,
-        code_verifier: verifier,
-        redirect_uri: redirectUri
-      }
-    }
-  );
+  const credentials = await requestFeishuUserToken({
+    grant_type: 'authorization_code',
+    code,
+    code_verifier: verifier,
+    redirect_uri: redirectUri
+  });
   const { data } = await feishuRequest(
     '/authen/v1/user_info',
     z.object({ data: z.object({ open_id: z.string().regex(/^ou_[A-Za-z0-9_-]+$/) }) }),
-    { token: access_token }
+    { token: credentials.access_token }
   );
-  return data.open_id;
+  return { openId: data.open_id, credentials };
 }

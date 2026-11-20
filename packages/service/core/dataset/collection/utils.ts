@@ -354,7 +354,11 @@ export const syncCollection = async (collection: CollectionWithDatasetType) => {
     return {
       type: DatasetSourceReadTypeEnum.apiFile,
       sourceId,
-      apiDatasetServer: dataset.apiDatasetServer
+      apiDatasetServer: dataset.apiDatasetServer,
+      apiDatasetOptions: {
+        feishuSourceUrl: collection.feishuSourceUrl,
+        feishuActor: { teamId: String(dataset.teamId), tmbId: String(dataset.tmbId) }
+      }
     };
   })();
 
@@ -362,6 +366,7 @@ export const syncCollection = async (collection: CollectionWithDatasetType) => {
     teamId: collection.teamId,
     tmbId: collection.tmbId,
     datasetId: collection.datasetId,
+    imageIndex: collection.imageIndex,
     ...sourceReadType
   });
 
@@ -445,8 +450,7 @@ export const getTrainingModeByCollection = ({
   if (
     trainingType === DatasetCollectionDataProcessModeEnum.chunk &&
     imageIndex &&
-    supportImageIndex &&
-    isProVersion()
+    supportImageIndex
   ) {
     return TrainingModeEnum.image;
   }
@@ -454,8 +458,7 @@ export const getTrainingModeByCollection = ({
   if (
     (trainingType === DatasetCollectionDataProcessModeEnum.chunk ||
       trainingType === DatasetCollectionDataProcessModeEnum.template) &&
-    autoIndexes &&
-    isProVersion()
+    autoIndexes
   ) {
     return TrainingModeEnum.auto;
   }

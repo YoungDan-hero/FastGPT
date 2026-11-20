@@ -21,10 +21,17 @@ import * as session from '@fastgpt/service/support/user/session';
 import { Types } from '@fastgpt/service/common/mongo';
 import {
   consumeFeishuOauth,
+  getFeishuOauthUrls,
   safeFeishuReturnPath,
   startFeishuOauth
 } from '@fastgpt/service/support/user/feishu/oauth';
+import * as systemConfig from '@fastgpt/service/common/system/systemInstanceConfig/runtime';
 import { wantsKnowledgeWrite } from '@fastgpt/service/support/user/feishu/knowledgeIntent';
+import { getFeishuTenantToken } from '@fastgpt/service/support/user/feishu/client';
+import {
+  getFeishuDatasetAccessToken,
+  saveFeishuDatasetGrant
+} from '@fastgpt/service/support/user/feishu/datasetAccess';
 import { serviceEnv } from '@fastgpt/service/env';
 import { filterDatasetsByTmbId } from '@fastgpt/service/core/dataset/utils';
 import { runWithContext } from '@fastgpt/service/core/workflow/utils/context';
@@ -45,6 +52,7 @@ const originalEnv = {
   FEISHU_ORG_ENABLED: serviceEnv.FEISHU_ORG_ENABLED,
   FEISHU_ORG_APP_ID: serviceEnv.FEISHU_ORG_APP_ID,
   FEISHU_ORG_APP_SECRET: serviceEnv.FEISHU_ORG_APP_SECRET,
+  FEISHU_ORG_DEV_LAN_ORIGIN: serviceEnv.FEISHU_ORG_DEV_LAN_ORIGIN,
   FEISHU_ORG_PROTECTED_ADMIN_OPEN_ID: serviceEnv.FEISHU_ORG_PROTECTED_ADMIN_OPEN_ID
 };
 
@@ -61,7 +69,52 @@ describe('Feishu organization', () => {
   afterEach(() => {
     Object.assign(serviceEnv, originalEnv);
     vi.restoreAllMocks();
+    vi.unstubAllEnvs();
     vi.unstubAllGlobals();
+  });
+
+  it('accepts the configured private HTTP host only in development', () => {
+    const currentConfig = systemConfig.getSystemInstanceConfig();
+    const defaultOrigin = 'https://studio.example.com';
+    vi.spyOn(systemConfig, 'getSystemInstanceConfig').mockReturnValue({
+      ...currentConfig,
+      site: { ...currentConfig.site, publicUrl: defaultOrigin }
+    });
+
+    const host = '192.168.10.20:3100';
+    const lanOrigin = `http://${host}`;
+    vi.stubEnv('NODE_ENV', 'development');
+    Object.assign(serviceEnv, { FEISHU_ORG_DEV_LAN_ORIGIN: lanOrigin });
+
+    const lanLogin = getFeishuOauthUrls(host);
+    expect(new URL(lanLogin.redirectUri).origin).toBe(lanOrigin);
+    expect(lanLogin.stateCookie('state')).toContain('HttpOnly');
+    expect(lanLogin.stateCookie('state')).toContain('SameSite=Lax');
+    expect(lanLogin.stateCookie('state')).not.toContain('Secure');
+    expect(new URL(getFeishuOauthUrls('192.168.10.21:3100').redirectUri).origin).toBe(
+      defaultOrigin
+    );
+
+    vi.stubEnv('NODE_ENV', 'production');
+    const productionLogin = getFeishuOauthUrls(host);
+    expect(new URL(productionLogin.redirectUri).origin).toBe(defaultOrigin);
+    expect(productionLogin.stateCookie('state')).toContain('Secure');
+  });
+
+  it('uses the supplied app ID and secret to request a tenant access token', async () => {
+    const fetchToken = vi.fn(async () =>
+      Response.json({ code: 0, tenant_access_token: 'dataset-app-token' })
+    );
+    vi.stubGlobal('fetch', fetchToken);
+    await expect(
+      getFeishuTenantToken({ appId: 'cli_dataset', secret: 'dataset-secret' })
+    ).resolves.toBe('dataset-app-token');
+    expect(fetchToken).toHaveBeenCalledWith(
+      'https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal',
+      expect.objectContaining({
+        body: JSON.stringify({ app_id: 'cli_dataset', app_secret: 'dataset-secret' })
+      })
+    );
   });
 
   it('locks OAuth state to the browser and consumes it only once', async () => {
@@ -83,14 +136,58 @@ describe('Feishu organization', () => {
     const saved = await consumeFeishuOauth(appId, state, state);
     expect(saved?.returnPath).toBe('/chat/share?shareId=test');
     const url = new URL(authorization);
+    expect(url.searchParams.has('scope')).toBe(false);
     expect(url.searchParams.get('code_challenge')).toBe(
       createHash('sha256').update(saved!.verifier).digest('base64url')
     );
     expect(await consumeFeishuOauth(appId, state, state)).toBeUndefined();
+    const delegated = await startFeishuOauth({
+      appId,
+      returnPath: '/dashboard/agent',
+      redirectUri: 'http://127.0.0.1:3100/api/test',
+      datasetAccessMemberId: 'member-id'
+    });
+    expect(new URL(delegated.authorization).searchParams.get('scope')?.split(' ')).toEqual(
+      expect.arrayContaining(['docx:document:readonly', 'bitable:app:readonly', 'offline_access'])
+    );
+    expect(await consumeFeishuOauth(appId, delegated.state, delegated.state)).toMatchObject({
+      datasetAccessMemberId: 'member-id'
+    });
     expect(safeFeishuReturnPath('/\\outside.invalid', '')).toBe('/dashboard/agent');
     expect(safeFeishuReturnPath('/chat/share?shareId=test', '/pilot')).toBe(
       '/pilot/chat/share?shareId=test'
     );
+  });
+
+  it('encrypts the document grant and refreshes it once under the recipient member lease', async () => {
+    const root = await getRootUser();
+    const actor = { teamId: root.teamId, tmbId: root.tmbId };
+    const grants = new Map<string, string>();
+    vi.spyOn(LeaseCache.prototype, 'withLease').mockImplementation(async ({ fn }) =>
+      fn({ assertValid: () => {}, signal: new AbortController().signal })
+    );
+    vi.spyOn(redisCacheAdapter, 'get').mockImplementation(async (key) => grants.get(key) ?? null);
+    vi.spyOn(redisCacheAdapter, 'set').mockImplementation(async ({ key, value }) => {
+      grants.set(key, value);
+    });
+    const fetchToken = vi.fn(async (_url, { body }) => {
+      expect(JSON.parse(body)).toMatchObject({
+        grant_type: 'refresh_token',
+        refresh_token: 'old-refresh'
+      });
+      return Response.json({ code: 0, access_token: 'new-access', expires_in: 300 });
+    });
+    vi.stubGlobal('fetch', fetchToken);
+    await saveFeishuDatasetGrant(actor, {
+      access_token: 'old-access',
+      expires_in: 1,
+      refresh_token: 'old-refresh',
+      refresh_token_expires_in: 600
+    });
+    expect([...grants.values()][0]).not.toContain('old-refresh');
+    await expect(getFeishuDatasetAccessToken(actor)).resolves.toBe('new-access');
+    await expect(getFeishuDatasetAccessToken(actor)).resolves.toBe('new-access');
+    expect(fetchToken).toHaveBeenCalledTimes(1);
   });
 
   it('moves existing members and revokes departed accounts without using a partial snapshot', async () => {

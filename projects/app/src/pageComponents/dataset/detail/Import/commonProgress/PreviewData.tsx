@@ -60,6 +60,8 @@ const PreviewData = () => {
           previewFile.apiFileId ||
           '',
         externalFileId: previewFile.externalFileId,
+        feishuSourceUrl: previewFile.feishuSourceUrl,
+        collectionId: importSource === ImportDataSourceEnum.reTraining ? previewFile.id : undefined,
 
         ...chunkData,
         selector: processParamsForm.getValues('webSelector'),

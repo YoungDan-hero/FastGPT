@@ -1,5 +1,4 @@
 import { create, devtools, persist, immer } from '@fastgpt/web/common/zustand';
-import axios from 'axios';
 import type { OAuthEnum } from '@fastgpt/global/support/user/constant';
 import type { GetSystemInitDataResponse } from '@fastgpt/global/openapi/common/system/api';
 import type { FastGPTFeConfigsType, LicenseDataType } from '@fastgpt/global/common/system/types';
@@ -38,8 +37,6 @@ type State = {
 
   loading: boolean;
   setLoading: (val: boolean) => null;
-  gitStar: number;
-  loadGitStar: () => Promise<void>;
 
   notSufficientModalType?: NotSufficientModalType;
   setNotSufficientModalType: (val?: NotSufficientModalType) => void;
@@ -111,21 +108,6 @@ export const useSystemStore = create<State>()(
             state.loading = val;
           });
           return null;
-        },
-
-        gitStar: 26500,
-        async loadGitStar() {
-          if (!get().feConfigs?.show_git) return;
-          try {
-            const { data: git } = await axios.get('https://api.github.com/repos/labring/FastGPT');
-
-            set((state) => {
-              state.gitStar = git.stargazers_count;
-            });
-            // gitStar 加载失败静默处理（非核心功能，不打断用户）
-          } catch {
-            // 忽略 git star 加载失败
-          }
         },
 
         notSufficientModalType: undefined,
@@ -257,8 +239,6 @@ export const useSystemStore = create<State>()(
           };
         },
         partialize: (state) => ({
-          gitStar: state.gitStar,
-
           loginStore: state.loginStore,
           initDataBufferId: state.initDataBufferId,
           feConfigs: state.feConfigs,

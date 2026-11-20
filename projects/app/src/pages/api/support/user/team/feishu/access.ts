@@ -12,7 +12,10 @@ import {
 } from '@fastgpt/global/support/permission/constant';
 import {
   FeishuAccessBodySchema,
-  FeishuAccessResponseSchema
+  FeishuAccessQuerySchema,
+  FeishuAccessResponseSchema,
+  type FeishuAccessCollaborator,
+  type FeishuAccessQuery
 } from '@fastgpt/global/openapi/support/user/team/org/api';
 import type { OrgSchemaType } from '@fastgpt/global/support/user/team/org/type';
 import { TeamMemberStatusEnum } from '@fastgpt/global/support/user/team/constant';
@@ -24,6 +27,11 @@ import { MongoDatasetCollection } from '@fastgpt/service/core/dataset/collection
 import { getResourceOwnedClbs } from '@fastgpt/service/support/permission/controller';
 import { resolveCollectionParentClbs } from '@fastgpt/service/support/permission/collection/controller';
 import { assertDatasetCollectionPermissionEnabled } from '@fastgpt/service/support/permission/collection/datasetSwitch';
+import {
+  mergeResourceCollaborators,
+  shouldInheritResourcePermission,
+  toInheritedCollaborators
+} from '@fastgpt/service/support/permission/resourcePermissionPolicy';
 import { MongoOrgModel } from '@fastgpt/service/support/permission/org/orgSchema';
 import { updateResourceCollaborators } from '@fastgpt/service/support/permission/resourcePermissionService';
 import type { SyncChildrenPermissionResourceType } from '@fastgpt/service/support/permission/inheritPermission';
@@ -41,7 +49,7 @@ import { NextAPI } from '@/service/middleware/entry';
 
 const roleValues = { read: ReadRoleVal, write: WriteRoleVal, manage: ManageRoleVal };
 
-async function handler(req: ApiRequestProps, res: ApiResponseType) {
+async function handler(req: ApiRequestProps<unknown, FeishuAccessQuery>, res: ApiResponseType) {
   if (req.method !== 'GET' && req.method !== 'POST') return res.status(405).end();
   const admin = await authSystemAdmin({ req });
   const { appId } = getFeishuOrgCredentials();
@@ -54,15 +62,28 @@ async function handler(req: ApiRequestProps, res: ApiResponseType) {
   res.setHeader('Cache-Control', 'no-store');
 
   if (req.method === 'GET') {
+    const { datasetId } = parseApiInput({ req, querySchema: FeishuAccessQuerySchema }).query;
+    const dataset = datasetId
+      ? await MongoDataset.findOne(
+          { _id: datasetId, teamId, deleteTime: null },
+          'name tmbId parentId inheritPermission'
+        ).lean()
+      : undefined;
+    if (datasetId && !dataset) throw CommonErrEnum.invalidParams;
+
     const [departments, users, apps, datasets] = await Promise.all([
       MongoOrgModel.find(departmentFilter, 'name path pathId').sort({ name: 1 }).lean(),
       MongoUser.find(directoryVerifiedUser(teamId), '_id').lean(),
-      MongoApp.find({ teamId, deleteTime: null, type: { $ne: AppTypeEnum.hidden } }, 'name')
-        .sort({ name: 1 })
-        .lean(),
-      MongoDataset.find({ teamId, deleteTime: null }, 'name collectionPermissionEnabled')
-        .sort({ name: 1 })
-        .lean()
+      dataset
+        ? []
+        : MongoApp.find({ teamId, deleteTime: null, type: { $ne: AppTypeEnum.hidden } }, 'name')
+            .sort({ name: 1 })
+            .lean(),
+      dataset
+        ? []
+        : MongoDataset.find({ teamId, deleteTime: null }, 'name collectionPermissionEnabled')
+            .sort({ name: 1 })
+            .lean()
     ]);
     const collectionDatasets = new Map(
       datasets
@@ -80,27 +101,76 @@ async function handler(req: ApiRequestProps, res: ApiResponseType) {
       )
         .sort({ name: 1 })
         .lean(),
-      MongoDatasetCollection.find(
-        { teamId, datasetId: { $in: Array.from(collectionDatasets.keys()) } },
-        'name datasetId'
-      )
-        .sort({ name: 1 })
-        .lean()
+      collectionDatasets.size
+        ? MongoDatasetCollection.find(
+            { teamId, datasetId: { $in: Array.from(collectionDatasets.keys()) } },
+            'name datasetId'
+          )
+            .sort({ name: 1 })
+            .lean()
+        : []
     ]);
     const departmentNames = new Map(departments.map((dept) => [dept.pathId, dept.name]));
     const option = (item: { _id: unknown; name: string }) => ({
       id: String(item._id),
       name: item.name
     });
+    const departmentOptions = departments.map((item) => ({
+      ...option(item),
+      name: [
+        ...item.path.split('/').flatMap((id) => departmentNames.get(id) ?? []),
+        item.name
+      ].join(' / ')
+    }));
+    const memberOptions = members.map(option);
+
+    if (dataset) {
+      const resourceType = PerResourceTypeEnum.dataset;
+      const ownerTmbId = String(dataset.tmbId);
+      const [childCollaborators, parentCollaborators] = await Promise.all([
+        getResourceOwnedClbs({ teamId, resourceType, resourceId: String(dataset._id) }),
+        dataset.parentId && shouldInheritResourcePermission(dataset.inheritPermission)
+          ? getResourceOwnedClbs({ teamId, resourceType, resourceId: String(dataset.parentId) })
+          : []
+      ]);
+      const directory = {
+        department: new Map(departmentOptions.map(({ id, name }) => [id, name])),
+        member: new Map(memberOptions.map(({ id, name }) => [id, name]))
+      };
+      const inheritedIds = new Set(
+        parentCollaborators.map((item) => String(item.orgId ?? item.tmbId))
+      );
+      const collaborators = mergeResourceCollaborators({
+        parentCollaborators,
+        childCollaborators: [...childCollaborators, { tmbId: ownerTmbId, permission: OwnerRoleVal }]
+      }).flatMap<FeishuAccessCollaborator>((item) => {
+        const principal = item.orgId ? 'department' : 'member';
+        const id = String(item.orgId ?? item.tmbId);
+        const name = directory[principal].get(id);
+        if (name === undefined) return [];
+
+        const role = (() => {
+          if (item.permission === OwnerRoleVal) return 'owner';
+          if (item.permission & ManageRoleVal) return 'manage';
+          if (item.permission & WriteRoleVal) return 'write';
+          if (item.permission & ReadRoleVal) return 'read';
+        })();
+        return role ? [{ id, name, principal, role, inherited: inheritedIds.has(id) }] : [];
+      });
+
+      return FeishuAccessResponseSchema.parse({
+        departments: departmentOptions,
+        members: memberOptions.filter(({ id }) => id !== ownerTmbId),
+        app: [],
+        dataset: [option(dataset)],
+        collection: [],
+        collaborators
+      });
+    }
+
     return FeishuAccessResponseSchema.parse({
-      departments: departments.map((item) => ({
-        ...option(item),
-        name: [
-          ...item.path.split('/').flatMap((id) => departmentNames.get(id) ?? []),
-          item.name
-        ].join(' / ')
-      })),
-      members: members.map(option),
+      departments: departmentOptions,
+      members: memberOptions,
       app: apps.map(option),
       dataset: datasets.map(option),
       collection: collections.map((item) => ({
@@ -195,16 +265,30 @@ async function handler(req: ApiRequestProps, res: ApiResponseType) {
           })
         : undefined;
 
+    // 知识库的旧记录可能还缺少物化的继承 ACL。修改单个对象前补齐其余继承项，避免误关闭继承。
+    const datasetParentCollaborators =
+      kind === 'dataset' &&
+      parentCollaborators &&
+      shouldInheritResourcePermission(resource.inheritPermission)
+        ? toInheritedCollaborators(parentCollaborators)
+        : undefined;
+    const effectiveCollaborators = datasetParentCollaborators
+      ? mergeResourceCollaborators({
+          parentCollaborators: datasetParentCollaborators,
+          childCollaborators: current
+        })
+      : current;
+
     await updateResourceCollaborators({
       resource: { ...resource, _id: resourceId, teamId, datasetId },
       resourceModel,
       resourceType,
       oldCollaborators: current,
       newCollaborators: [
-        ...current.filter((item) => !isTarget(item)),
+        ...effectiveCollaborators.filter((item) => !isTarget(item)),
         ...(role === 'remove' ? [] : [{ ...target, permission: roleValues[role] }])
       ],
-      parentCollaborators,
+      parentCollaborators: datasetParentCollaborators ?? parentCollaborators,
       session
     });
     return resource.name;

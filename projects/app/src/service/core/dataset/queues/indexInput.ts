@@ -42,7 +42,7 @@ export const getIndexTrainingBaseIndexes = async (trainingData: TrainingDataType
   }
 
   let supportVlm = false;
-  if (trainingData.collection.imageIndex) {
+  if (trainingData.imageIndex ?? trainingData.collection.imageIndex) {
     const modelHandle = await getTeamModelHandle({ teamId: String(trainingData.teamId) });
     try {
       supportVlm = !!modelHandle.getModelData(

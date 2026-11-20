@@ -33,7 +33,9 @@ async function handler(req: ApiRequestProps) {
   });
 
   const fileDetailRes = await (
-    await getApiDatasetRequest(dataset.apiDatasetServer)
+    await getApiDatasetRequest(dataset.apiDatasetServer, {
+      feishuActor: { teamId: String(dataset.teamId), tmbId: String(dataset.tmbId) }
+    })
   ).getFileDetail({
     apiFileId
   });

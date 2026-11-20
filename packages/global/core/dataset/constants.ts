@@ -35,8 +35,7 @@ export const ApiDatasetTypeMap: Record<
     icon: 'core/dataset/feishuDatasetOutline',
     avatar: 'core/dataset/feishuDatasetColor',
     label: i18nT('dataset:feishu_dataset'),
-    collectionLabel: i18nT('common:File'),
-    courseUrl: '/guide/dataset/third-party/lark_dataset'
+    collectionLabel: i18nT('common:File')
   },
   [DatasetTypeEnum.yuque]: {
     icon: 'core/dataset/yuqueDatasetOutline',

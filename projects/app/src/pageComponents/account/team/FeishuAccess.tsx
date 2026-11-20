@@ -17,13 +17,9 @@ import FillRowTabs from '@fastgpt/web/components/common/Tabs/FillRowTabs';
 import { useConfirm } from '@fastgpt/web/hooks/useConfirm';
 import { useRequest } from '@fastgpt/web/hooks/useRequest';
 import { useToast } from '@fastgpt/web/hooks/useToast';
-import type {
-  FeishuAccessBody,
-  FeishuAccessResponse
-} from '@fastgpt/global/openapi/support/user/team/org/api';
-import { GET, POST } from '@/web/common/api/request';
+import type { FeishuAccessBody } from '@fastgpt/global/openapi/support/user/team/org/api';
+import { getFeishuAccess, updateFeishuAccess } from '@/web/support/user/team/org/api';
 
-const endpoint = '/support/user/team/feishu/access';
 type GrantRole = Exclude<FeishuAccessBody['role'], 'remove'>;
 
 const principalOptions = [
@@ -65,18 +61,15 @@ export default function FeishuAccess() {
     resourceId: '',
     role: 'read'
   });
-  const { data, loading, error, refresh } = useRequest(() => GET<FeishuAccessResponse>(endpoint), {
+  const { data, loading, error, refresh } = useRequest(() => getFeishuAccess(), {
     manual: false,
     errorToast: ''
   });
-  const { runAsync: save, loading: saving } = useRequest(
-    (body: FeishuAccessBody) => POST(endpoint, body),
-    {
-      errorToast: '权限更新失败',
-      onSuccess: (_, [body]) =>
-        toast({ status: 'success', title: body.role === 'remove' ? '已移除授权' : '已保存授权' })
-    }
-  );
+  const { runAsync: save, loading: saving } = useRequest(updateFeishuAccess, {
+    errorToast: '权限更新失败',
+    onSuccess: (_, [body]) =>
+      toast({ status: 'success', title: body.role === 'remove' ? '已移除授权' : '已保存授权' })
+  });
 
   const isDepartment = form.principal === 'department';
   const principalLabel = isDepartment ? '部门' : '员工';

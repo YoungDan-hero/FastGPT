@@ -25,7 +25,6 @@ const DingTalk = dynamic(() => import('./DingTalk'));
 const Wecom = dynamic(() => import('./Wecom'));
 const OffiAccount = dynamic(() => import('./OffiAccount'));
 const Wechat = dynamic(() => import('./Wechat'));
-const Playground = dynamic(() => import('./Playground'));
 
 type PublishListItem = {
   icon: string;
@@ -64,18 +63,6 @@ const OutLink = () => {
         title: t('common:core.app.Api request'),
         value: PublishChannelEnum.apikey,
         isProFn: false,
-        group: 'native'
-      },
-      {
-        icon: 'core/chat/sidebar/home',
-        title: (
-          <HStack gap={1}>
-            <Box>{t('common:navbar.Chat')}</Box>
-            {!isPro && <ProTag />}
-          </HStack>
-        ),
-        value: PublishChannelEnum.playground,
-        isProFn: true,
         group: 'native'
       },
       ...(feConfigs?.show_publish_feishu !== false &&
@@ -323,12 +310,7 @@ const OutLink = () => {
         </Box>
       </Box>
 
-      <Box
-        flex={1}
-        minW={0}
-        minH={0}
-        overflowY={linkType === PublishChannelEnum.playground ? 'auto' : 'hidden'}
-      >
+      <Box flex={1} minW={0} minH={0} overflowY={'hidden'}>
         {linkType === PublishChannelEnum.share && (
           <Link
             appId={appId}
@@ -352,7 +334,6 @@ const OutLink = () => {
         {linkType === PublishChannelEnum.wechat && (
           <Wechat appId={appId} onRefreshOutLinkCounts={refetchOutLinkCounts} />
         )}
-        {linkType === PublishChannelEnum.playground && <Playground appId={appId} />}
       </Box>
     </Flex>
   );

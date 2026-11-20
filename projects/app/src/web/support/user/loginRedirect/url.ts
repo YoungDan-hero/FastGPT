@@ -11,6 +11,10 @@ export const getFeishuLoginStartPath = (lastRoute?: string | string[]) => {
     : path;
 };
 
+/** 复用飞书登录回调，为当前员工补充读取文档的授权。 */
+export const getFeishuDatasetAuthorizationPath = () =>
+  `${getFeishuLoginStartPath()}?datasetAccess=1`;
+
 /**
  * 构造鉴权失败后的登录页地址。
  *

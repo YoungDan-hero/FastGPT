@@ -1,4 +1,5 @@
 import { getSystemInstanceConfig } from '@fastgpt/service/common/system/systemInstanceConfig/runtime';
+import { isProVersion } from '@fastgpt/service/common/system/constants';
 import { generateQA } from '@/service/core/dataset/queues/generateQA';
 import { generateRebuildIndex } from '@/service/core/dataset/queues/generateRebuildIndex';
 import { generateRebuildSynonym } from '@/service/core/dataset/queues/generateRebuildSynonym';
@@ -31,7 +32,10 @@ export const createDatasetTrainingMongoWatch = () =>
       const { mode } = change.fullDocument as DatasetTrainingSchemaType;
       if (mode === TrainingModeEnum.qa) {
         generateQA();
-      } else if (mode === TrainingModeEnum.index) {
+      } else if (
+        mode === TrainingModeEnum.index ||
+        (!isProVersion() && (mode === TrainingModeEnum.auto || mode === TrainingModeEnum.image))
+      ) {
         generatePreCreatedData();
       } else if (mode === TrainingModeEnum.rebuildIndex) {
         generateRebuildIndex();

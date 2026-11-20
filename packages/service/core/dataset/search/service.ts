@@ -87,9 +87,9 @@ export const search = async ({
 
   // 3. 外部业务策略在任何模型调用前完成；回调不可获取或修改检索权限范围。
   await deps.beforeSearch();
-  const imageQueries = await Promise.all(
-    imageKeys.map((key) => deps.images.createQueryUrl({ key }))
-  );
+  const imageQueries = (
+    await Promise.all(imageKeys.map((key) => deps.images.createQueryUrl({ key })))
+  ).filter(Boolean);
   /** 只序列化已校验的结构化条件，复用既有过滤执行器和集合权限交集。 */
   const serializeFilter = () => {
     if (!filter) return undefined;

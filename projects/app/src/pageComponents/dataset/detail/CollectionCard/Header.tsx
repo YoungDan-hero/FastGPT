@@ -149,6 +149,7 @@ const Header = ({
   );
 
   const isWebSite = datasetDetail?.type === DatasetTypeEnum.websiteDataset;
+  const isFeishuDataset = datasetDetail?.type === DatasetTypeEnum.feishu;
   const isIndexModelAvailable = datasetDetail.vectorModel?.isActive === true;
   const blockMissingIndexModel = (onClick?: () => void) => () => {
     if (isIndexModelAvailable) return onClick?.();
@@ -157,6 +158,12 @@ const Header = ({
       title: t('app:dataset.Configure_index_model_first')
     });
   };
+  const openFileImport = (source: ImportDataSourceEnum) =>
+    blockMissingIndexModel(() =>
+      router.replace({
+        query: { ...router.query, currentTab: TabEnum.import, source }
+      })
+    );
 
   return (
     <MyBox display={['block', 'flex']} alignItems={'center'} gap={3}>
@@ -485,7 +492,17 @@ const Header = ({
           {datasetDetail?.type && ApiDatasetTypeMap[datasetDetail.type] && (
             <>
               {datasetDetail.status === DatasetStatusEnum.active && (
-                <HStack gap={2}>
+                <HStack gap={2} flexWrap={'wrap'}>
+                  {isFeishuDataset && (
+                    <Button
+                      h={'36px'}
+                      variant={'whitePrimary'}
+                      leftIcon={<MyIcon name="common/uploadFileFill" w={'18px'} />}
+                      onClick={openFileImport(ImportDataSourceEnum.fileLocal)}
+                    >
+                      {t('dataset:upload_local_file')}
+                    </Button>
+                  )}
                   <Flex
                     px={3.5}
                     py={2}
@@ -494,15 +511,7 @@ const Header = ({
                     bg={'primary.500'}
                     overflow={'hidden'}
                     color={'white'}
-                    onClick={blockMissingIndexModel(() =>
-                      router.replace({
-                        query: {
-                          ...router.query,
-                          currentTab: TabEnum.import,
-                          source: ImportDataSourceEnum.apiDataset
-                        }
-                      })
-                    )}
+                    onClick={openFileImport(ImportDataSourceEnum.apiDataset)}
                   >
                     <Flex h={'20px'} alignItems={'center'}>
                       <MyIcon
@@ -514,7 +523,7 @@ const Header = ({
                       />
                     </Flex>
                     <Box h={'20px'} fontSize={'sm'} fontWeight={'500'}>
-                      {t('dataset:add_file')}
+                      {t(isFeishuDataset ? 'dataset:import_from_feishu' : 'dataset:add_file')}
                     </Box>
                   </Flex>
                   {!hasTrainingData && feConfigs?.isPlus && (

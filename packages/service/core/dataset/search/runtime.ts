@@ -5,11 +5,14 @@ import { getTmbInfoByTmbId } from '../../../support/user/team/controller';
 import { getAuthorizedModelIds, assertAuthModels } from '../../../support/permission/model/auth';
 import { isAuthorizedTempFileS3Key } from '../../../common/s3/sources/temp/key';
 import { getS3DatasetSource } from '../../../common/s3/sources/dataset';
+import { DEFAULT_IMAGE_DOWNLOAD_MAX_SIZE } from '../../../common/file/image/utils';
+import { getLogger, LogCategories } from '../../../common/logger';
 import { getTeamModelHandle } from '../../ai/model/catalog/service';
 import type { ModelHandle } from '../../ai/model/catalog/handle';
 import { assertAppDatasetIndexModelsAvailable, getAssertedDatasetEmbeddingModel } from '../model';
 import { defaultSearchDatasetData } from './index';
 import { findFirstDatasetSearchVlmModel } from './vlm';
+import { shouldInlineDatasetImage } from './utils';
 import type { DatasetSearchActor, DatasetSearchRuntime } from './type';
 
 /**
@@ -21,6 +24,7 @@ export const createDatasetSearchRuntime = ({
   modelHandle
 }: { modelHandle?: ModelHandle } = {}): DatasetSearchRuntime => {
   const memberReads = new Map<string, ReturnType<typeof getTmbInfoByTmbId>>();
+  const inlineImages = shouldInlineDatasetImage();
   /** 先缓存 Promise 再等待结果，合并并发读取；失败在当前请求内保持拒绝，不重试放行。 */
   const getTmbInfo = (actor: DatasetSearchActor) => {
     const key = JSON.stringify([actor.teamId, actor.tmbId]);
@@ -95,7 +99,19 @@ export const createDatasetSearchRuntime = ({
     images: {
       isAuthorizedKey: isAuthorizedTempFileS3Key,
       createQueryUrl: async ({ key }) => {
-        const { url } = await getS3DatasetSource().createExternalUrl({ key, expiredHours: 1 });
+        const storage = getS3DatasetSource();
+        if (inlineImages) {
+          // 搜索服务已按 teamId 检查临时图归属。过期或过大的图片不能阻断同请求的其他召回。
+          return storage
+            .getDatasetBase64Image(key, DEFAULT_IMAGE_DOWNLOAD_MAX_SIZE)
+            .catch((error) => {
+              getLogger(LogCategories.MODULE.DATASET.DATA).warn('Cannot read dataset query image', {
+                error
+              });
+              return '';
+            });
+        }
+        const { url } = await storage.createExternalUrl({ key, expiredHours: 1 });
         return url;
       }
     },

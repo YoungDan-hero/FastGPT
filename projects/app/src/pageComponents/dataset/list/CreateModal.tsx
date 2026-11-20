@@ -169,7 +169,7 @@ const CreateModal = ({
                 placeholder={t('dataset:dataset_name_placeholder')}
                 maxLength={30}
                 {...register('name', {
-                  required: true
+                  required: type !== DatasetTypeEnum.feishu
                 })}
               />
             </Flex>

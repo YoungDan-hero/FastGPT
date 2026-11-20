@@ -11,7 +11,7 @@ import { DatasetPageContext } from '@/web/core/dataset/context/datasetPageContex
 import { getDocPath } from '@/web/common/system/doc';
 import MyIcon from '@fastgpt/web/components/common/Icon';
 import type { ApiDatasetServerType } from '@fastgpt/global/core/dataset/apiDataset/type';
-import { DatasetTypeMap } from '@fastgpt/global/core/dataset/constants';
+import { DatasetTypeEnum, DatasetTypeMap } from '@fastgpt/global/core/dataset/constants';
 
 export type EditAPIDatasetInfoFormType = {
   id: string;
@@ -33,13 +33,31 @@ const EditAPIDatasetInfoModal = ({
 
   const datasetDetail = useContextSelector(DatasetPageContext, (v) => v.datasetDetail);
   const type = datasetDetail.type;
+  const server = defaultForm.apiDatasetServer;
+  const isFeishu = type === DatasetTypeEnum.feishu;
 
   const form = useForm<EditAPIDatasetInfoFormType>({
-    defaultValues: defaultForm
+    defaultValues: isFeishu
+      ? {
+          ...defaultForm,
+          apiDatasetServer: {
+            ...server,
+            feishuApp: {
+              appId:
+                server?.feishuApp?.appId ?? server?.feishuLink?.appId ?? server?.feishuServer?.appId
+            }
+          }
+        }
+      : defaultForm
   });
 
   const { runAsync: onSave, loading } = useRequest(
-    (data: EditAPIDatasetInfoFormType) => onEdit(data),
+    (data: EditAPIDatasetInfoFormType) =>
+      onEdit(
+        isFeishu
+          ? { id: data.id, apiDatasetServer: { feishuApp: data.apiDatasetServer?.feishuApp } }
+          : data
+      ),
     {
       onSuccess: () => {
         toast({

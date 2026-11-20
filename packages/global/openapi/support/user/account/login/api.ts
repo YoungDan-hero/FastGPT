@@ -17,7 +17,8 @@ import { PublicAuthTrackRegisterParamsSchema } from '../common';
 import { OpenObjectOpenApiMeta } from '../../../../../common/zod/openapi';
 
 export const FeishuOrgLoginStartQuerySchema = z.object({
-  lastRoute: z.string().max(2048).optional()
+  lastRoute: z.string().max(2048).optional(),
+  datasetAccess: z.literal('1').optional().meta({ description: '为当前登录的员工授权读取飞书文档' })
 });
 export type FeishuOrgLoginStartQuery = z.infer<typeof FeishuOrgLoginStartQuerySchema>;
 

@@ -240,6 +240,7 @@ export const DatasetCollectionSchema = ChunkSettingsSchema.omit({
   rawLink: z.string().optional().meta({ description: '原始链接' }),
   externalFileId: z.string().optional().meta({ description: '外部文件 ID' }),
   apiFileId: z.string().optional().meta({ description: 'API 文件 ID' }),
+  feishuSourceUrl: z.string().optional().meta({ description: '该文件的飞书来源链接' }),
   apiFileParentId: z.string().optional().meta({ description: 'API 文件父级 ID' }),
   externalFileUrl: z.string().optional().meta({ description: '外部文件 URL' }),
 
@@ -364,6 +365,8 @@ export const DatasetTrainingSchema = z.object({
   a: z.string().meta({ description: '回答/补充文本' }),
   imageId: z.string().optional().meta({ description: '图片 ID' }),
   imageDescMap: z.record(z.string(), z.string()).optional().meta({ description: '图片描述映射' }),
+  autoIndexes: z.boolean().optional().meta({ description: '本次训练覆盖集合的补充索引设置' }),
+  imageIndex: z.boolean().optional().meta({ description: '本次训练覆盖集合的图片索引设置' }),
   dataMetadata: z.record(z.string(), z.any()).optional().meta({ description: '自定义元数据' }),
   chunkIndex: z.number().meta({ description: '块索引' }),
   indexSize: z.number().optional().meta({ description: '索引大小' }),

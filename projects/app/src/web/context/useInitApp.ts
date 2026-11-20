@@ -49,7 +49,7 @@ const MARKETING_PARAMS: (keyof MarketingQueryParams)[] = [
 export const useInitApp = () => {
   const router = useRouter();
 
-  const { loadGitStar, setInitd, feConfigs } = useSystemStore();
+  const { setInitd, feConfigs } = useSystemStore();
   const { userInfo } = useUserStore();
   const [scripts, setScripts] = useState<FastGPTFeConfigsType['scripts']>([]);
   const [title, setTitle] = useState(getDomainDefaultConfig('site').name);
@@ -89,7 +89,7 @@ export const useInitApp = () => {
       feConfigs: { scripts, isPlus, systemTitle }
     } = await clientInitData();
 
-    setTitle(systemTitle || 'FastGPT');
+    setTitle(systemTitle || getDomainDefaultConfig('site').name);
 
     // log fastgpt
     if (!isPlus) {
@@ -99,8 +99,6 @@ export const useInitApp = () => {
         `GitHub：https://github.com/labring/FastGPT`
       );
     }
-
-    loadGitStar();
 
     setScripts(scripts || []);
     setInitd();

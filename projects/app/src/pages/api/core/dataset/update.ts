@@ -1,12 +1,13 @@
 import { NextAPI } from '@/service/middleware/entry';
 import { DatasetAuditEventEnum } from '@fastgpt/global/core/dataset/audit/constants/event';
 import { DatasetTypeEnum } from '@fastgpt/global/core/dataset/constants';
+import { UserError } from '@fastgpt/global/common/error/utils';
 import { type DatasetSchemaType } from '@fastgpt/global/core/dataset/type';
 import {
   UpdateDatasetBodySchema,
   type UpdateDatasetBody
 } from '@fastgpt/global/openapi/core/dataset/api';
-import { ManagePermissionVal } from '@fastgpt/global/support/permission/constant';
+import { AuthUserTypeEnum, ManagePermissionVal } from '@fastgpt/global/support/permission/constant';
 import type { ApiRequestProps } from '@fastgpt/next/type';
 import { mongoSessionRun } from '@fastgpt/service/common/mongo/sessionRun';
 import { getTeamModelHandle } from '@fastgpt/service/core/ai/model/catalog/service';
@@ -31,6 +32,11 @@ import { computedCollectionChunkSettings } from '@fastgpt/global/core/dataset/tr
 import { getS3AvatarSource } from '@fastgpt/service/common/s3/sources/avatar';
 import { isInternalAddress, PRIVATE_URL_TEXT } from '@fastgpt/service/common/system/utils';
 import { parseApiInput } from '@fastgpt/service/common/zod/requestParseError';
+import {
+  verifyFeishuDatasetApp,
+  verifyFeishuDatasetLink
+} from '@fastgpt/service/core/dataset/apiDataset/feishuDataset/link';
+import { parseFeishuResourceLink } from '@fastgpt/global/core/dataset/apiDataset/utils';
 
 /**
  * 更新知识库接口
@@ -93,7 +99,7 @@ async function handler(req: ApiRequestProps<UpdateDatasetBody>) {
   }
 
   // 2. 基础属性更新
-  const { dataset, tmbId, teamId, isRoot } = await authDataset({
+  const { dataset, tmbId, teamId, isRoot, authType } = await authDataset({
     req,
     authToken: true,
     authApiKey: true,
@@ -144,12 +150,56 @@ async function handler(req: ApiRequestProps<UpdateDatasetBody>) {
     handle: modelHandle
   });
 
+  const updatedSource = await (async () => {
+    if (!apiDatasetServer) return;
+    const current = dataset.apiDatasetServer;
+    if (!apiDatasetServer.feishuApp && !apiDatasetServer.feishuLink) {
+      if (dataset.type === DatasetTypeEnum.feishu && (current?.feishuApp || current?.feishuLink))
+        return;
+      return apiDatasetServer;
+    }
+    // 库创建者管理 App 凭据。历史飞书链接作为旧文件的来源保留。
+    if (
+      dataset.type !== DatasetTypeEnum.feishu ||
+      authType !== AuthUserTypeEnum.token ||
+      String(dataset.tmbId) !== String(tmbId)
+    ) {
+      throw new UserError(
+        'Cannot change the Feishu dataset source',
+        '请由知识库创建者登录后管理飞书应用。'
+      );
+    }
+    if (apiDatasetServer.feishuApp) {
+      return {
+        feishuApp: await verifyFeishuDatasetApp(
+          apiDatasetServer.feishuApp,
+          current?.feishuApp ?? current?.feishuLink ?? current?.feishuServer
+        )
+      };
+    }
+    const oldLink = current?.feishuLink;
+    const existingUrl = oldLink && parseFeishuResourceLink(oldLink.url)?.url;
+    if (
+      !oldLink ||
+      !existingUrl ||
+      parseFeishuResourceLink(apiDatasetServer.feishuLink?.url ?? '')?.url !== existingUrl
+    ) {
+      throw new UserError('Cannot replace a Feishu source', '请通过「从飞书导入」追加新链接。');
+    }
+    const { source } = await verifyFeishuDatasetLink(apiDatasetServer.feishuLink, {
+      ...oldLink,
+      ...current?.feishuApp
+    });
+    return current?.feishuApp
+      ? { feishuApp: { appId: source.appId, appSecret: source.appSecret } }
+      : { feishuLink: { ...source, url: oldLink.url } };
+  })();
   const apiDatasetServerPatch =
-    apiDatasetServer === undefined
+    updatedSource === undefined
       ? undefined
       : buildDatasetConfigUpdatePatch({
           currentValue: dataset.apiDatasetServer,
-          patchValue: apiDatasetServer,
+          patchValue: updatedSource,
           rootPath: 'apiDatasetServer'
         });
   const configAuditLogs = buildDatasetUpdateAuditLogs({

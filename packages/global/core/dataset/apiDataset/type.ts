@@ -34,6 +34,25 @@ export const FeishuServerSchema = z
   .meta({ description: '飞书服务器配置' });
 export type FeishuServerType = z.infer<typeof FeishuServerSchema>;
 export type FeishuServer = FeishuServerType;
+export const FeishuSourceUrlSchema = z.string().trim().min(1).max(2048).meta({
+  description: '飞书云文档、多维表格或对应知识库页面链接',
+  example: 'https://example.feishu.cn/docx/DocToken'
+});
+export const FeishuAppSchema = z.object({
+  appId: z
+    .string()
+    .trim()
+    .max(200)
+    .optional()
+    .meta({ description: '用户提供的飞书自建应用 App ID' }),
+  appSecret: z
+    .string()
+    .optional()
+    .meta({ description: '飞书自建应用密钥，仅用于写入', writeOnly: true })
+});
+export type FeishuApp = z.infer<typeof FeishuAppSchema>;
+export const FeishuLinkSchema = FeishuAppSchema.extend({ url: FeishuSourceUrlSchema });
+export type FeishuLink = z.infer<typeof FeishuLinkSchema>;
 export const YuqueServerSchema = z
   .object({
     userId: z.string(),
@@ -61,6 +80,8 @@ export const ApiDatasetServerSchema = z
   .object({
     apiServer: APIFileServerSchema.optional(),
     feishuServer: FeishuServerSchema.optional(),
+    feishuApp: FeishuAppSchema.optional(),
+    feishuLink: FeishuLinkSchema.optional(),
     yuqueServer: YuqueServerSchema.optional(),
     dingtalkServer: DingtalkServerSchema.optional()
   })

@@ -192,7 +192,7 @@ describe('initStaticData through the real initialization pipeline', () => {
         JSON.stringify({
           version,
           state: {
-            gitStar: 123,
+            systemVersion: '4.18.0',
             feConfigs: { ...global.feConfigs, sso: { url: 'https://sso.internal.example.com' } },
             initDataBufferId: 'config-1',
             aiproxyChannels: global.aiproxyChannelsCache,
@@ -213,7 +213,7 @@ describe('initStaticData through the real initialization pipeline', () => {
       expect(useSystemStore.getState()).not.toHaveProperty('defaultModels');
       const persisted = JSON.parse(storage.get('globalStore')!);
       expect(persisted.version).toBe(4);
-      expect(persisted.state.gitStar).toBe(123);
+      expect(persisted.state.systemVersion).toBe('4.18.0');
       expect(persisted.state).not.toHaveProperty('aiproxyChannels');
     }
   );

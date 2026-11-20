@@ -67,6 +67,8 @@ const TrainingDataSchema = new Schema({
   },
   imageId: String,
   imageDescMap: Object,
+  autoIndexes: Boolean,
+  imageIndex: Boolean,
   dataMetadata: {
     type: Object
   },

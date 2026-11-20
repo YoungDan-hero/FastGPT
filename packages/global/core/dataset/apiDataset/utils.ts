@@ -1,6 +1,39 @@
 import type { ApiDatasetErrorCode, ApiDatasetResult, ApiDatasetServerType } from './type';
 import { getErrorMessage } from '../../../common/error/utils';
 
+/** 解析单个飞书资源的标识，保留所选数据表和视图，移除分享链接中的其他参数。 */
+export const parseFeishuResourceLink = (input: string) => {
+  try {
+    const url = new URL(input.trim());
+    if (
+      url.protocol !== 'https:' ||
+      url.username ||
+      url.password ||
+      url.port ||
+      !/(^|\.)(feishu\.cn|larksuite\.com)$/.test(url.hostname)
+    ) {
+      return;
+    }
+    const match = /^\/(docx|base|wiki)\/([A-Za-z0-9_-]{1,200})\/?$/.exec(url.pathname);
+    if (!match) return;
+
+    const [, type, token] = match;
+    const tableId = type === 'docx' ? null : url.searchParams.get('table');
+    const viewId = type === 'docx' ? null : url.searchParams.get('view');
+    if (tableId !== null && !/^tbl[A-Za-z0-9_-]{1,197}$/.test(tableId)) return;
+    if (viewId !== null && (!tableId || !/^vew[A-Za-z0-9_-]{1,197}$/.test(viewId))) return;
+
+    url.pathname = `/${type}/${token}`;
+    url.search = '';
+    url.hash = '';
+    if (tableId) url.searchParams.set('table', tableId);
+    if (viewId) url.searchParams.set('view', viewId);
+    return { type, token, url: url.href, tableId, viewId };
+  } catch {
+    return;
+  }
+};
+
 /** 构造成功结果，保留 success 判别类型，便于调用方直接读取 data。 */
 export const toApiDatasetSuccess = <T>(
   data: T
@@ -122,7 +155,8 @@ export const classifyApiDatasetError = (
 export const filterApiDatasetServerPublicData = (apiDatasetServer?: ApiDatasetServerType) => {
   if (!apiDatasetServer) return undefined;
 
-  const { apiServer, yuqueServer, feishuServer, dingtalkServer } = apiDatasetServer;
+  const { apiServer, yuqueServer, feishuServer, feishuApp, feishuLink, dingtalkServer } =
+    apiDatasetServer;
 
   return {
     apiServer: apiServer
@@ -146,6 +180,8 @@ export const filterApiDatasetServerPublicData = (apiDatasetServer?: ApiDatasetSe
           folderToken: feishuServer.folderToken
         }
       : undefined,
+    ...(feishuApp && { feishuApp: { appId: feishuApp.appId } }),
+    ...(feishuLink && { feishuLink: { url: feishuLink.url, appId: feishuLink.appId } }),
     dingtalkServer: dingtalkServer
       ? {
           appKey: dingtalkServer.appKey,

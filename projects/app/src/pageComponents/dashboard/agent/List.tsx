@@ -1,5 +1,5 @@
 import React, { useMemo, useRef, useState } from 'react';
-import { Box, Grid, IconButton, HStack, Flex, VStack, Checkbox } from '@chakra-ui/react';
+import { Box, Grid, IconButton, HStack, Checkbox } from '@chakra-ui/react';
 import { useRouter } from 'next/router';
 import { batchMoveApps, delAppById, resumeInheritPer, changeOwner } from '@/web/core/app/api';
 import { useConfirm } from '@fastgpt/web/hooks/useConfirm';
@@ -34,10 +34,9 @@ import UserBox from '@fastgpt/web/components/common/UserBox';
 import { ChatSidebarPaneEnum } from '@/pageComponents/chat/constants';
 import { ReadRoleVal } from '@fastgpt/global/support/permission/constant';
 import { useToast } from '@fastgpt/web/hooks/useToast';
-import { getWebReqUrl } from '@fastgpt/web/common/system/utils';
 import { createAppTypeMap } from '@/pageComponents/app/constants';
 import { getDashboardAppListScene } from './utils/appListTypes';
-import { getResourceListDisplayTime, hasAppListActiveFilter } from './filters/utils';
+import { getResourceListDisplayTime } from './filters/utils';
 import { useUserStore } from '@/web/support/user/useUserStore';
 import ListCreateCard from '@/pageComponents/dashboard/ListCreateCard';
 import ResourceListCard from '@/pageComponents/dashboard/ResourceListCard';
@@ -96,12 +95,6 @@ const List = () => {
   const hasCreatePer = parentId
     ? Boolean(folderDetail?.permission.hasWritePer && folderDetail.type !== AppTypeEnum.httpPlugin)
     : userInfo?.team.permission.hasAppCreatePer;
-  const hasActiveFilter = hasAppListActiveFilter({
-    searchKey,
-    type: appType,
-    creatorMode: listFilters.creator.mode,
-    applyToolbarFilters: isPc
-  });
 
   const [editedApp, setEditedApp] = useState<EditResourceInfoFormType>();
   const [editPerAppId, setEditPerAppId] = useState<string>();
@@ -493,43 +486,26 @@ const List = () => {
       mr={folderDetail ? [-3, -2] : [-3, -6]}
     >
       <>
-        {isInitialLoading ? (
-          <Grid
-            ref={gridRef}
-            py={4}
-            gridTemplateColumns={
-              parentId
-                ? ['1fr', 'repeat(2,1fr)', 'repeat(2,1fr)', 'repeat(3,1fr)']
-                : ['1fr', 'repeat(2,1fr)', 'repeat(2,1fr)', 'repeat(3,1fr)', 'repeat(4,1fr)']
-            }
-            gridGap={5}
-            alignItems={'stretch'}
-          >
-            {renderVirtualGridItems(renderAppCard)}
-          </Grid>
-        ) : isEmpty && !parentId && !hasActiveFilter && !isBatchMode && isPc && hasCreatePer ? (
-          <CreateButton appType={appType} />
-        ) : (
-          <Grid
-            ref={gridRef}
-            py={4}
-            gridTemplateColumns={
-              parentId
-                ? ['1fr', 'repeat(2,1fr)', 'repeat(2,1fr)', 'repeat(3,1fr)']
-                : ['1fr', 'repeat(2,1fr)', 'repeat(2,1fr)', 'repeat(3,1fr)', 'repeat(4,1fr)']
-            }
-            gridGap={5}
-            alignItems={'stretch'}
-          >
-            {!isBatchMode &&
-              (hasCreatePer ? (
-                <ListCreateButton appType={appType} />
-              ) : !parentId ? (
-                <ForbiddenCreateButton />
-              ) : null)}
-            {renderVirtualGridItems(renderAppCard)}
-          </Grid>
-        )}
+        <Grid
+          ref={gridRef}
+          py={4}
+          gridTemplateColumns={
+            parentId
+              ? ['1fr', 'repeat(2,1fr)', 'repeat(2,1fr)', 'repeat(3,1fr)']
+              : ['1fr', 'repeat(2,1fr)', 'repeat(2,1fr)', 'repeat(3,1fr)', 'repeat(4,1fr)']
+          }
+          gridGap={5}
+          alignItems={'stretch'}
+        >
+          {!isInitialLoading &&
+            !isBatchMode &&
+            (hasCreatePer ? (
+              <ListCreateButton appType={appType} />
+            ) : !parentId ? (
+              <ForbiddenCreateButton />
+            ) : null)}
+          {renderVirtualGridItems(renderAppCard)}
+        </Grid>
         <DeleteConfirmModal />
         <ConfirmCopyModal />
         {!!editedApp && (
@@ -578,77 +554,6 @@ const List = () => {
   );
 };
 
-const CreateButton = ({ appType }: { appType: AppTypeEnum | 'all' }) => {
-  const { t } = useTranslation();
-  const [isHoverCreateButton, setIsHoverCreateButton] = useState(false);
-  const router = useRouter();
-  const parentId = router.query.parentId;
-  const createAppType = resolveCreateAppType(appType, router.pathname);
-  const isToolType = ToolTypeList.includes(createAppType);
-
-  return (
-    <Box
-      position="relative"
-      width="100%"
-      minH={'150px'}
-      overflow="hidden"
-      rounded={'sm'}
-      cursor={'pointer'}
-      onClick={() => {
-        router.push(
-          `/dashboard/create?appType=${createAppType}${parentId ? `&parentId=${parentId}` : ''}`
-        );
-      }}
-      onMouseEnter={() => setIsHoverCreateButton(true)}
-      onMouseLeave={() => setIsHoverCreateButton(false)}
-      boxShadow={
-        isHoverCreateButton
-          ? '0 4px 27.1px 0 rgba(199, 212, 233, 0.29)'
-          : '0 4px 27.1px 0 rgba(199, 212, 233, 0.29)'
-      }
-      userSelect={'none'}
-      mt={4}
-    >
-      <Box
-        as="img"
-        src={getWebReqUrl('/imgs/app/createButton.jpg')}
-        alt="operational advertisement"
-        width="100%"
-        maxW="100%"
-        display="block"
-        transition="transform 0.4s cubic-bezier(0.4, 0, 0.2, 1)"
-        transform={isHoverCreateButton ? 'scale(1.2) translateY(-12px)' : 'scale(1) translateY(0)'}
-      />
-      <VStack
-        position="absolute"
-        top="50%"
-        left="50%"
-        transform="translate(-50%, -50%)"
-        color="#334155"
-        fontSize="32px"
-        fontWeight="medium"
-      >
-        <Flex gap={2.5} alignItems={'center'}>
-          <MyIcon name={'core/app/create'} w={8} />
-          {isToolType ? t('app:create_your_first_tool') : t('app:create_your_first_agent')}
-        </Flex>
-        <Box
-          mt={4}
-          h={14}
-          w={'330px'}
-          display={'flex'}
-          alignItems={'center'}
-          justifyContent={'center'}
-          sx={{
-            background: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='330' height='56'%3E%3Crect x='0.5' y='0.5' width='329' height='55' rx='12' fill='none' stroke='%237895FE' stroke-width='1' stroke-dasharray='6 6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat center`
-          }}
-        >
-          <MyIcon name={'common/addLight'} w={8} color={'#7895FE'} />
-        </Box>
-      </VStack>
-    </Box>
-  );
-};
 const ListCreateButton = ({ appType }: { appType: AppTypeEnum | 'all' }) => {
   const router = useRouter();
   const parentId = router.query.parentId;

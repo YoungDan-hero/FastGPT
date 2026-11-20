@@ -3,6 +3,7 @@ import { addHours } from 'date-fns';
 import { type ChatItemMiniType } from '@fastgpt/global/core/chat/type';
 import { isHttpUrl } from '@fastgpt/global/common/string/url';
 import { hashStr } from '@fastgpt/global/common/string/tools';
+import { createInternalAddressChecker } from '@fastgpt/global/common/system/network';
 import { getLogger, LogCategories } from '../../../common/logger';
 import type { OpenaiAccountType } from '@fastgpt/global/support/user/team/type';
 import { getImageBase64 } from '../../../common/file/image/utils';
@@ -10,6 +11,7 @@ import { getMultipleDataToBase64 } from '../../../common/system/constants';
 import { isS3ObjectKey } from '../../../common/s3/utils';
 import { S3Buckets } from '../../../common/s3/config/constants';
 import { createS3DownloadAccessUrl } from '../../../common/s3/accessLink/downloadAlias/service';
+import { buildS3AccessLinkDownloadUrl } from '../../../common/s3/accessLink/url';
 import { isAuthorizedDatasetFileS3Key } from '../../../common/s3/sources/dataset/key';
 import { getS3DatasetSource } from '../../../common/s3/sources/dataset';
 import { DatasetDataIndexTypeEnum } from '@fastgpt/global/core/dataset/data/constants';
@@ -27,6 +29,10 @@ import type { DatasetSynonymMappingMetadataType } from '@fastgpt/global/core/dat
 
 const logger = getLogger(LogCategories.MODULE.DATASET.DATA);
 const maxSynonymQueryCodePoints = 4096;
+const { isInternalResolvedIP: isPrivateImageAddress } = createInternalAddressChecker({
+  nodeEnv: 'production',
+  checkInternalIp: () => true
+});
 
 type DatasetSynonymQueryMatch = DatasetSynonymMappingMetadataType & {
   preserveOriginal: boolean;
@@ -193,12 +199,26 @@ export const normalizeImageToBase64 = async (imageUrl: string, toBase64?: boolea
 export const isImageEmbeddingIndex = (index: { type?: string | number }) =>
   index.type === DatasetDataIndexTypeEnum.imageEmbedding;
 
+/** 外部模型能直接读取公开下载链接；本机地址和内网 IP 的图片从存储读取。 */
+export const shouldInlineDatasetImage = (toBase64 = getMultipleDataToBase64()) => {
+  if (toBase64) return true;
+  const downloadUrl = URL.parse(buildS3AccessLinkDownloadUrl(''));
+  const host = downloadUrl?.hostname.replace(/^\[|\]$|\.$/g, '').toLowerCase();
+  return (
+    !host ||
+    host === 'localhost' ||
+    host.endsWith('.localhost') ||
+    host.endsWith('.local') ||
+    isPrivateImageAddress(host)
+  );
+};
+
 /**
  * 将知识库图片索引转换为模型可读输入。
  *
  * 私有 S3 对象只允许读取绑定当前 datasetId 的 `dataset/*` key；只放行合法的
  * data URL 或外部 HTTP(S) 链接，其余格式（包括 temp/*、chat/*、本地路径等）一律拒绝。
- * toBase64 语义同 normalizeImageToBase64：批量入口一次求值下传，避免混合形态。
+ * toBase64 语义同 normalizeImageToBase64。没有可公开访问的下载地址时，私有图由服务端读取。
  */
 export const normalizeDatasetIndexImageToModelInput = async ({
   imageUrl,
@@ -214,8 +234,7 @@ export const normalizeDatasetIndexImageToModelInput = async ({
     if (!isAuthorizedDatasetFileS3Key({ key: imageUrl, datasetId: datasetId ?? '' })) {
       throw new Error('Invalid dataset file key');
     }
-    // 与 normalizeImageToBase64 共用同一开关：Admin 切换后两条图片链路行为一致
-    if (toBase64 ?? getMultipleDataToBase64()) {
+    if (shouldInlineDatasetImage(toBase64)) {
       return getS3DatasetSource().getDatasetBase64Image(imageUrl);
     }
     return createS3DownloadAccessUrl({

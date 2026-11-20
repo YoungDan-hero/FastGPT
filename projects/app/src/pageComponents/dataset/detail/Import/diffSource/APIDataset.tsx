@@ -1,9 +1,18 @@
 import { useContextSelector } from 'use-context-selector';
 import { DatasetImportContext } from '../Context';
-import React, { useCallback, useState } from 'react';
+import React, { useState } from 'react';
 import dynamic from 'next/dynamic';
 import Loading from '@fastgpt/web/components/common/MyLoading';
-import { Box, Button, Checkbox, Flex } from '@chakra-ui/react';
+import {
+  Box,
+  Button,
+  Checkbox,
+  Flex,
+  FormControl,
+  FormErrorMessage,
+  FormLabel,
+  Input
+} from '@chakra-ui/react';
 import { DatasetPageContext } from '@/web/core/dataset/context/datasetPageContext';
 import { useRequest } from '@fastgpt/web/hooks/useRequest';
 import {
@@ -18,6 +27,7 @@ import { getSourceNameIcon } from '@fastgpt/global/core/dataset/utils';
 import MyBox from '@fastgpt/web/components/common/MyBox';
 import { RootCollectionId } from '@fastgpt/global/core/dataset/collection/constants';
 import { type APIFileItemType } from '@fastgpt/global/core/dataset/apiDataset/type';
+import { parseFeishuResourceLink } from '@fastgpt/global/core/dataset/apiDataset/utils';
 import SearchInput from '@fastgpt/web/components/common/Input/SearchInput';
 import { useMount } from 'ahooks';
 
@@ -45,13 +55,19 @@ export default React.memo(APIDatasetCollection);
 const CustomAPIFileInput = () => {
   const { t } = useTranslation();
   const datasetDetail = useContextSelector(DatasetPageContext, (v) => v.datasetDetail);
+  const isFeishuLink = Boolean(
+    datasetDetail.apiDatasetServer?.feishuApp || datasetDetail.apiDatasetServer?.feishuLink
+  );
   const goToNext = useContextSelector(DatasetImportContext, (v) => v.goToNext);
 
   const sources = useContextSelector(DatasetImportContext, (v) => v.sources);
   const setSources = useContextSelector(DatasetImportContext, (v) => v.setSources);
 
+  const [linkInput, setLinkInput] = useState(sources[0]?.feishuSourceUrl ?? '');
+  const [feishuSourceUrl, setFeishuSourceUrl] = useState(sources[0]?.feishuSourceUrl);
+  const [invalidLink, setInvalidLink] = useState(false);
   const [selectFiles, setSelectFiles] = useState<APIFileItemType[]>([]);
-  const [isSelectAll, setIsSelectAll] = useState(false);
+  const [isRootSelected, setIsRootSelected] = useState(false);
   const [parent, setParent] = useState<ParentTreePathItemType>({
     parentId: '',
     parentName: ''
@@ -60,22 +76,35 @@ const CustomAPIFileInput = () => {
 
   const [searchKey, setSearchKey] = useState('');
 
-  const { data: fileList = [], loading } = useRequest(
-    async () => {
-      return getApiDatasetFileList({
+  const {
+    data: listedFiles,
+    loading,
+    refresh
+  } = useRequest(
+    async () => ({
+      feishuSourceUrl,
+      files: await getApiDatasetFileList({
         datasetId: datasetDetail._id,
         parentId: parent?.parentId,
-        searchKey: searchKey
-      });
-    },
+        searchKey,
+        feishuSourceUrl
+      })
+    }),
     {
-      refreshDeps: [datasetDetail._id, datasetDetail.apiDatasetServer, parent, searchKey],
+      ready: !isFeishuLink || Boolean(feishuSourceUrl),
+      refreshDeps: [
+        datasetDetail._id,
+        datasetDetail.apiDatasetServer,
+        parent,
+        searchKey,
+        feishuSourceUrl
+      ],
       throttleWait: 500,
       manual: false
     }
   );
 
-  const { data: existIdList = new Set() } = useRequest(
+  const { data: existIdList, loading: loadingExistingIds } = useRequest(
     async () => {
       return new Set<string>(await getApiDatasetFileListExistId({ datasetId: datasetDetail._id }));
     },
@@ -84,106 +113,176 @@ const CustomAPIFileInput = () => {
     }
   );
 
+  const hasCurrentSource =
+    !isFeishuLink ||
+    (Boolean(feishuSourceUrl) &&
+      listedFiles?.feishuSourceUrl === feishuSourceUrl &&
+      parseFeishuResourceLink(linkInput)?.url === feishuSourceUrl);
+  const fileList = hasCurrentSource ? (listedFiles?.files ?? []) : [];
+  const isLoading = loading || loadingExistingIds;
+  const canSelectFiles = hasCurrentSource && !isLoading && existIdList !== undefined;
+  const selectableFiles = fileList.filter((file) => !existIdList?.has(file.id));
+  const selectedIds = new Set(selectFiles.map((file) => file.id));
+  // 飞书直链返回完整文件列表。目录来源仍由服务端遍历选中的目录。
+  const selectedFiles = isFeishuLink
+    ? selectableFiles.filter((file) => selectedIds.has(file.id))
+    : selectFiles.filter((file) => !existIdList?.has(file.id));
+  const canSelectAll = canSelectFiles && (!isFeishuLink || selectableFiles.length > 0);
+  const isAllSelected =
+    isRootSelected ||
+    (isFeishuLink && selectableFiles.length > 0 && selectedFiles.length === selectableFiles.length);
+  const canContinue = canSelectFiles && (selectedFiles.length > 0 || isRootSelected);
+
   // Init selected files
   useMount(() => {
     const hasRootFolder = sources.some((item) => item.apiFile?.id === RootCollectionId);
-    if (hasRootFolder) {
-      setIsSelectAll(true);
-      setSelectFiles([]);
+    if (hasRootFolder && !isFeishuLink) {
+      setIsRootSelected(true);
     } else {
       setSelectFiles(sources.map((item) => item.apiFile).filter(Boolean) as APIFileItemType[]);
     }
   });
 
-  const { runAsync: onclickNext, loading: onNextLoading } = useRequest(
-    async () => {
-      const finalSelectedFiles: APIFileItemType[] = await (async () => {
-        if (isSelectAll) {
-          return [
-            {
-              id: RootCollectionId,
-              rawId: RootCollectionId,
-              parentId: '',
-              name: 'ROOT_FOLDER',
-              type: 'folder',
-              hasChild: true,
-              updateTime: new Date(),
-              createTime: new Date()
-            }
-          ];
-        }
+  const onClickNext = () => {
+    if (!canContinue) return;
 
-        return selectFiles;
-      })();
+    const finalSelectedFiles: APIFileItemType[] = isRootSelected
+      ? [
+          {
+            id: RootCollectionId,
+            rawId: RootCollectionId,
+            parentId: '',
+            name: 'ROOT_FOLDER',
+            type: 'folder',
+            hasChild: true,
+            updateTime: new Date(),
+            createTime: new Date()
+          }
+        ]
+      : selectedFiles;
 
-      setSources(
-        finalSelectedFiles.map((item) => ({
-          id: item.id,
-          apiFileId: item.id,
-          apiFile: item,
-          createStatus: 'waiting',
-          sourceName: item.name,
-          icon:
-            item.type === 'folder'
-              ? 'common/folderFill'
-              : (getSourceNameIcon({ sourceName: item.name }) as any)
-        }))
-      );
-    },
-    {
-      onSuccess() {
-        goToNext();
-      }
+    setSources(
+      finalSelectedFiles.map((item) => ({
+        id: item.id,
+        apiFileId: item.id,
+        feishuSourceUrl,
+        apiFile: item,
+        createStatus: 'waiting',
+        sourceName: item.name,
+        icon:
+          item.type === 'folder'
+            ? 'common/folderFill'
+            : (getSourceNameIcon({ sourceName: item.name }) as any)
+      }))
+    );
+    goToNext();
+  };
+
+  const loadFeishuSource = () => {
+    const link = parseFeishuResourceLink(linkInput);
+    setInvalidLink(!link);
+    if (!link) return;
+    if (link.url === feishuSourceUrl) {
+      refresh();
+      return;
     }
-  );
+    setSelectFiles([]);
+    setFeishuSourceUrl(link.url);
+  };
 
-  const handleSelectAll = useCallback(() => {
-    if (parent?.parentId) return;
-
-    if (isSelectAll) {
-      // cancel the selection of the root directory
-      setIsSelectAll(false);
-      setSelectFiles([]);
-    } else {
-      // select the root directory
-      setIsSelectAll(true);
-      setSelectFiles([]);
+  const handleSelectAll = () => {
+    if (parent.parentId || !canSelectAll) return;
+    if (isFeishuLink) {
+      setSelectFiles(isAllSelected ? [] : selectableFiles);
+      return;
     }
-  }, [isSelectAll, parent?.parentId]);
+    setIsRootSelected((selected) => !selected);
+    setSelectFiles([]);
+  };
+
+  const toggleFileSelection = (item: APIFileItemType) => {
+    if (!canSelectFiles || existIdList?.has(item.id)) return;
+    if (isRootSelected) {
+      setIsRootSelected(false);
+      setSelectFiles(selectableFiles.filter((file) => file.id !== item.id));
+      return;
+    }
+    setSelectFiles((files) =>
+      files.some((file) => file.id === item.id)
+        ? files.filter((file) => file.id !== item.id)
+        : [...files, item]
+    );
+  };
 
   return (
-    <MyBox isLoading={loading} position="relative" h="full">
+    <MyBox isLoading={isLoading} position="relative" h="full">
       <Flex flexDirection={'column'} h="full">
-        <Flex justifyContent={'space-between'}>
-          <FolderPath
-            forbidLastClick
-            paths={paths}
-            onClick={(parentId) => {
-              const index = paths.findIndex((item) => item.parentId === parentId);
-              if (index === -1) {
-                setParent({
-                  parentId: '',
-                  parentName: ''
-                });
-                setPaths([]);
-                return;
-              }
-              setParent(paths[index]);
-              setPaths(paths.slice(0, index + 1));
+        {isFeishuLink ? (
+          <Flex
+            as="form"
+            alignItems="flex-start"
+            gap={3}
+            onSubmit={(event) => {
+              event.preventDefault();
+              loadFeishuSource();
             }}
-          />
-          {datasetDetail?.apiDatasetServer?.apiServer && (
-            <Box w={'240px'}>
-              <SearchInput
-                value={searchKey}
-                onChange={(e) => setSearchKey(e.target.value)}
-                placeholder={t('common:core.workflow.template.Search')}
+          >
+            <FormControl isInvalid={invalidLink} maxW="620px">
+              <FormLabel htmlFor="feishu-source-link">{t('dataset:feishu_link_label')}</FormLabel>
+              <Input
+                id="feishu-source-link"
+                value={linkInput}
+                placeholder={t('dataset:feishu_link_placeholder')}
+                maxLength={2048}
+                onChange={(event) => {
+                  setLinkInput(event.target.value);
+                  setInvalidLink(false);
+                }}
               />
-            </Box>
-          )}
-        </Flex>
+              <FormErrorMessage>{t('dataset:feishu_link_invalid')}</FormErrorMessage>
+            </FormControl>
+            <Button
+              alignSelf="flex-start"
+              mt={8}
+              type="submit"
+              isLoading={loading}
+              isDisabled={!linkInput.trim()}
+            >
+              {t('dataset:feishu_link_load')}
+            </Button>
+          </Flex>
+        ) : (
+          <Flex justifyContent={'space-between'}>
+            <FolderPath
+              forbidLastClick
+              paths={paths}
+              onClick={(parentId) => {
+                const index = paths.findIndex((item) => item.parentId === parentId);
+                if (index === -1) {
+                  setParent({
+                    parentId: '',
+                    parentName: ''
+                  });
+                  setPaths([]);
+                  return;
+                }
+                setParent(paths[index]);
+                setPaths(paths.slice(0, index + 1));
+              }}
+            />
+            {datasetDetail?.apiDatasetServer?.apiServer && (
+              <Box w={'240px'}>
+                <SearchInput
+                  value={searchKey}
+                  onChange={(e) => setSearchKey(e.target.value)}
+                  placeholder={t('common:core.workflow.template.Search')}
+                />
+              </Box>
+            )}
+          </Flex>
+        )}
         <Box flex={1} overflowY="auto" mb={16} userSelect={'none'}>
-          <Box ml={2} mt={3}>
+          <Box ml={2} mt={3} display={hasCurrentSource ? 'block' : 'none'}>
             <Flex
               alignItems={'center'}
               py={3}
@@ -200,10 +299,9 @@ const CustomAPIFileInput = () => {
               ) : (
                 <Checkbox
                   className="checkbox"
-                  isChecked={isSelectAll}
-                  onChange={(e) => {
-                    handleSelectAll();
-                  }}
+                  isChecked={isAllSelected}
+                  isDisabled={!canSelectAll}
+                  onChange={handleSelectAll}
                 >
                   <Box>{t('dataset:Select_all')}</Box>
                 </Checkbox>
@@ -211,9 +309,8 @@ const CustomAPIFileInput = () => {
             </Flex>
 
             {fileList.map((item) => {
-              const isExists = existIdList.has(item.id);
-              const isChecked =
-                isExists || selectFiles.some((file) => file.id === item.id) || isSelectAll;
+              const isExists = existIdList?.has(item.id);
+              const isChecked = isExists || selectedIds.has(item.id) || isRootSelected;
               const canEnter = item.hasChild && !isChecked;
 
               return (
@@ -234,43 +331,18 @@ const CustomAPIFileInput = () => {
                         parentId: item.id,
                         parentName: item.name
                       });
-                    } else {
-                      // when choose single file, cancel the selection of the root directory
-                      if (isSelectAll) {
-                        // if in root selection mode, select all files except the clicked one
-                        setIsSelectAll(false);
-                        setSelectFiles(fileList.filter((file) => file.id !== item.id));
-                      } else {
-                        // normal selection mode
-                        if (isChecked) {
-                          setSelectFiles((state) => state.filter((file) => file.id !== item.id));
-                        } else {
-                          setSelectFiles((state) => [...state, item]);
-                        }
-                      }
                     }
+                    toggleFileSelection(item);
                   }}
                 >
                   <Checkbox
                     className="checkbox"
                     mr={2.5}
                     isChecked={isChecked}
-                    isDisabled={isExists}
+                    isDisabled={!canSelectFiles || isExists}
                     onChange={(e) => {
                       e.stopPropagation();
-                      // when choose single file, cancel the selection of the root directory
-                      if (isSelectAll) {
-                        // if in root selection mode, select all files except the clicked one
-                        setIsSelectAll(false);
-                        setSelectFiles(fileList.filter((file) => file.id !== item.id));
-                      } else {
-                        // normal selection mode
-                        if (isChecked) {
-                          setSelectFiles((state) => state.filter((file) => file.id !== item.id));
-                        } else {
-                          setSelectFiles((state) => [...state, item]);
-                        }
-                      }
+                      toggleFileSelection(item);
                     }}
                   />
                   <MyIcon
@@ -301,13 +373,9 @@ const CustomAPIFileInput = () => {
           right={0}
           p={4}
         >
-          <Button
-            isDisabled={selectFiles.length === 0 && !isSelectAll}
-            isLoading={onNextLoading}
-            onClick={onclickNext}
-          >
-            {selectFiles.length > 0
-              ? `${t('dataset:total_num_files', { total: selectFiles.length })} | `
+          <Button isDisabled={!canContinue} onClick={onClickNext}>
+            {selectedFiles.length > 0
+              ? `${t('dataset:total_num_files', { total: selectedFiles.length })} | `
               : ''}
             {t('common:next_step')}
           </Button>

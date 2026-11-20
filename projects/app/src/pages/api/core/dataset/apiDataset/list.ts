@@ -1,6 +1,7 @@
 import { NextAPI } from '@/service/middleware/entry';
-import { ReadPermissionVal } from '@fastgpt/global/support/permission/constant';
+import { ReadPermissionVal, WritePermissionVal } from '@fastgpt/global/support/permission/constant';
 import { getApiDatasetRequest } from '@fastgpt/service/core/dataset/apiDataset';
+import { assertCanImportFeishuSource } from '@fastgpt/service/core/dataset/apiDataset/auth';
 import { authDataset } from '@fastgpt/service/support/permission/dataset/auth';
 import type { ApiRequestProps } from '@fastgpt/next/type';
 import { parseApiInput } from '@fastgpt/service/common/zod/requestParseError';
@@ -21,19 +22,25 @@ async function handler(
   const {
     datasetId,
     searchKey = '',
-    parentId
+    parentId,
+    feishuSourceUrl
   } = parseApiInput({ req, bodySchema: GetApiDatasetFileListBodySchema }).body;
 
-  const { dataset } = await authDataset({
+  const { dataset, authType, tmbId } = await authDataset({
     req,
     authToken: true,
     authApiKey: true,
     datasetId,
-    per: ReadPermissionVal
+    per: feishuSourceUrl ? WritePermissionVal : ReadPermissionVal
   });
+  if (feishuSourceUrl) assertCanImportFeishuSource({ dataset, authType, tmbId });
 
   const files = await (
-    await getApiDatasetRequest(dataset.apiDatasetServer, { cache: browseCache })
+    await getApiDatasetRequest(dataset.apiDatasetServer, {
+      cache: browseCache,
+      feishuSourceUrl,
+      feishuActor: { teamId: String(dataset.teamId), tmbId: String(dataset.tmbId) }
+    })
   ).listFiles({ searchKey: searchKey, parentId });
 
   return GetApiDatasetFileListResponseSchema.parse(files);

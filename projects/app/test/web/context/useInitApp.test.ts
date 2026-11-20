@@ -39,7 +39,6 @@ vi.mock('@/web/common/system/staticData', () => ({
 
 vi.mock('@/web/common/system/useSystemStore', () => ({
   useSystemStore: () => ({
-    loadGitStar: vi.fn(),
     setInitd: vi.fn(),
     feConfigs: {}
   })

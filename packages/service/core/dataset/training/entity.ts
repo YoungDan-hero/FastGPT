@@ -48,7 +48,7 @@ export const hasDatasetTrainingTask = async ({
 
 /** 原子领取任务，返回更新后的租约；领取不消耗业务重试次数。 */
 export type FindAndLockTrainingTaskOptions = {
-  mode: TrainingModeEnum;
+  mode: TrainingModeEnum | TrainingModeEnum[];
   filter?: FilterQuery<DatasetTrainingSchemaType>;
   populate?: PopulateOptions[];
 };
@@ -61,7 +61,7 @@ export const findAndLockTrainingTask = <T>({
   MongoDatasetTraining.findOneAndUpdate(
     {
       ...filter,
-      mode,
+      mode: Array.isArray(mode) ? { $in: mode } : mode,
       retryCount: { $gt: 0 },
       lockTime: { $lte: new Date(Date.now() - TRAINING_LEASE_TIMEOUT_MS) }
     },

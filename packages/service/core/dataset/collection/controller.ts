@@ -706,6 +706,7 @@ export type CreateOneCollectionParams = ApiCreateDatasetCollectionParams & {
   externalFileId?: string;
   externalFileUrl?: string;
   apiFileId?: string;
+  feishuSourceUrl?: string;
   apiFileParentId?: string;
   rawTextLength?: number;
   hashRawText?: string;
@@ -905,6 +906,7 @@ export async function createOneCollection({ session, ...props }: CreateOneCollec
 export type CreateApiFileCollectionItem = {
   name: string;
   apiFileId: string;
+  feishuSourceUrl?: string;
   /**
    * server 侧父节点 id；带子文档的 file 与不带子文档的同级文件取值相同。
    * 调用方须先归一：无 server 父级时不传（而不是传 null），与 createOneCollection 的落库形态一致，
@@ -942,7 +944,13 @@ export const createApiFileCollectionsBatch = async ({
   /** 逐文件身份、位置和继承设置由 files 提供，不得被请求公共参数覆盖。 */
   createCollectionParams: Omit<
     CreateOneCollectionParams,
-    'name' | 'apiFileId' | 'apiFileParentId' | 'parentId' | 'session' | 'inheritPermission'
+    | 'name'
+    | 'apiFileId'
+    | 'feishuSourceUrl'
+    | 'apiFileParentId'
+    | 'parentId'
+    | 'session'
+    | 'inheritPermission'
   >;
   billing?: { mode: 'shared'; billId?: string } | { mode: 'perFile' };
   /** 缺省按文件数预估；同步的旧解析路径没有已知分块，传 0 保留其原估算契约。 */
@@ -974,6 +982,7 @@ export const createApiFileCollectionsBatch = async ({
         datasetId: String(dataset._id),
         parentId: file.parentId,
         apiFileId: file.apiFileId,
+        feishuSourceUrl: file.feishuSourceUrl,
         apiFileParentId: file.apiFileParentId,
         inheritPermission: file.inheritPermission,
         permissionSourceCollectionId: file.permissionSourceCollectionId,

@@ -1,4 +1,5 @@
 import { getSystemInstanceConfig } from '@fastgpt/service/common/system/systemInstanceConfig/runtime';
+import { isProVersion } from '@fastgpt/service/common/system/constants';
 import { updateDatasetDataByIndexes } from '@/service/core/dataset/data/data';
 import { pushGenerateVectorUsage } from '@/service/support/wallet/usage/push';
 import { delay } from '@fastgpt/global/common/system/utils';
@@ -22,6 +23,7 @@ import {
   type TrainingTaskLease
 } from '@fastgpt/service/core/dataset/training/service';
 import { getIndexTrainingUpdateInput } from './indexInput';
+import { runIndexEnhancement } from './indexEnhancement';
 import { checkTeamAiPointsAndLock } from './utils';
 
 const logger = getLogger(LogCategories.MODULE.DATASET.EMBEDDING);
@@ -33,8 +35,16 @@ const reduceQueue = () => {
 };
 
 type PopulateType = {
-  dataset: Pick<DatasetSchemaType, 'vectorModelId' | 'vectorModel' | 'vlmModelId' | 'vlmModel'>;
-  collection: { name: string; indexPrefixTitle: boolean; imageIndex?: boolean };
+  dataset: Pick<
+    DatasetSchemaType,
+    'vectorModelId' | 'vectorModel' | 'agentModelId' | 'agentModel' | 'vlmModelId' | 'vlmModel'
+  >;
+  collection: {
+    name: string;
+    indexPrefixTitle: boolean;
+    imageIndex?: boolean;
+    autoIndexes?: boolean;
+  };
   data?: {
     _id: string;
     q: string;
@@ -47,7 +57,7 @@ type PopulateType = {
 type TrainingDataType = DatasetTrainingSchemaType & PopulateType;
 
 /**
- * 专门处理预先创建的数据：向量、全文索引和 indexed 状态在同一事务内写回原数据。
+ * 处理预先创建的数据。社区版在首次写入前消费本地增强阶段，最终索引和 indexed 状态一起提交。
  * 该队列与普通 vector/rebuild 队列隔离，避免一个 worker 根据 dataId 和状态猜测任务类型。
  */
 export async function generatePreCreatedData(): Promise<any> {
@@ -76,15 +86,17 @@ export async function generatePreCreatedData(): Promise<any> {
       let claimed;
       try {
         claimed = await claimTrainingTask<PopulateType>({
-          mode: TrainingModeEnum.index,
+          mode: isProVersion()
+            ? TrainingModeEnum.index
+            : [TrainingModeEnum.index, TrainingModeEnum.auto, TrainingModeEnum.image],
           populate: [
             {
               path: 'dataset',
-              select: 'vectorModelId vectorModel vlmModelId vlmModel'
+              select: 'vectorModelId vectorModel agentModelId agentModel vlmModelId vlmModel'
             },
             {
               path: 'collection',
-              select: 'name indexPrefixTitle imageIndex'
+              select: 'name indexPrefixTitle imageIndex autoIndexes'
             },
             {
               path: 'data',
@@ -133,6 +145,10 @@ export async function generatePreCreatedData(): Promise<any> {
         });
 
         try {
+          if (data.mode === TrainingModeEnum.auto || data.mode === TrainingModeEnum.image) {
+            await runIndexEnhancement(data, lease);
+            continue;
+          }
           const { tokens } = await updatePreCreatedData({ trainingData: data, lease });
 
           const modelHandle = await getTeamModelHandle({ teamId: String(data.teamId) });
@@ -151,6 +167,7 @@ export async function generatePreCreatedData(): Promise<any> {
             trainingId: data._id,
             datasetId: data.datasetId,
             collectionId: data.collectionId,
+            mode: data.mode,
             dataId: data.dataId
           });
         } catch (err: any) {
@@ -201,7 +218,7 @@ const updatePreCreatedData = async ({
   const { tokens } = await updateDatasetDataByIndexes({
     dataId: String(datasetData._id),
     ...indexTrainingInput,
-    imageIndex: !!trainingData.collection.imageIndex,
+    imageIndex: trainingData.imageIndex ?? trainingData.collection.imageIndex,
     model: embModel,
     indexSize: trainingData.indexSize || getMaxIndexSize(embModel),
     indexPrefix: trainingData.collection.indexPrefixTitle

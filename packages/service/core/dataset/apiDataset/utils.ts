@@ -33,8 +33,9 @@ export type LegacyApiFileFolderMigration = {
 
 /** 沿用请求 factory 的配置优先级，旧目录正文兼容只适用于实际启用的钉钉 Provider。 */
 export const usesDingtalkDataset = (apiDatasetServer?: ApiDatasetServerType) => {
-  const { apiServer, yuqueServer, feishuServer, dingtalkServer } = apiDatasetServer ?? {};
-  return Boolean(dingtalkServer && !apiServer && !yuqueServer && !feishuServer);
+  const { apiServer, yuqueServer, feishuServer, feishuLink, dingtalkServer } =
+    apiDatasetServer ?? {};
+  return Boolean(dingtalkServer && !apiServer && !yuqueServer && !feishuServer && !feishuLink);
 };
 
 /**

@@ -44,6 +44,8 @@ import {
 } from '../../../../core/dataset/search/utils';
 
 const originalMultipleDataToBase64 = getTestInstanceConfig().feature.multipleDataToBase64;
+const originalStorageFileDomain = getTestInstanceConfig().storage.fileDomain;
+const originalPublicUrl = getTestInstanceConfig().site.publicUrl;
 const originalDatasetSynonymEnabled = serviceEnv.DATASET_SYNONYM_ENABLED;
 
 beforeEach(() => {
@@ -53,6 +55,8 @@ beforeEach(() => {
 afterEach(() => {
   serviceEnv.DATASET_SYNONYM_ENABLED = originalDatasetSynonymEnabled;
   getTestInstanceConfig().feature.multipleDataToBase64 = originalMultipleDataToBase64;
+  getTestInstanceConfig().storage.fileDomain = originalStorageFileDomain;
+  getTestInstanceConfig().site.publicUrl = originalPublicUrl;
 });
 
 describe('mergeDatasetSynonymQueryMatches', () => {
@@ -231,17 +235,37 @@ describe('normalizeDatasetIndexImageToModelInput', () => {
     expect(mockGetDatasetBase64Image).toHaveBeenCalledWith(key);
   });
 
-  it('should create signed S3 download URL when datasetId matches key and MULTIPLE_DATA_TO_BASE64 is false', async () => {
+  it('should use the public file domain when image conversion is off', async () => {
     getTestInstanceConfig().feature.multipleDataToBase64 = false;
+    getTestInstanceConfig().storage.fileDomain = 'https://files.example.com';
     const key = 'dataset/507f1f77bcf86cd799439011/image.png';
     const result = await normalizeDatasetIndexImageToModelInput({
       imageUrl: key,
       datasetId: '507f1f77bcf86cd799439011'
     });
 
-    expect(result).toMatch(/\/api\/system\/file\/d\//);
+    expect(result).toMatch(/^https:\/\/files\.example\.com\/api\/system\/file\/d\//);
     expect(mockGetDatasetBase64Image).not.toHaveBeenCalled();
   });
+
+  it.each(['', 'http://127.0.0.1:3100', 'http://[::1]:3100', 'http://192.168.10.8:3100'])(
+    'converts a private S3 image even with image conversion off when public URL is %s',
+    async (publicUrl) => {
+      getTestInstanceConfig().feature.multipleDataToBase64 = false;
+      getTestInstanceConfig().storage.fileDomain = '';
+      getTestInstanceConfig().site.publicUrl = publicUrl;
+      const key = 'dataset/507f1f77bcf86cd799439011/image.png';
+
+      await expect(
+        normalizeDatasetIndexImageToModelInput({
+          imageUrl: key,
+          datasetId: '507f1f77bcf86cd799439011',
+          toBase64: false
+        })
+      ).resolves.toBe('data:image/png;base64,dataset_img');
+      expect(mockGetDatasetBase64Image).toHaveBeenCalledExactlyOnceWith(key);
+    }
+  );
 
   it('should throw error when datasetId does not match key', async () => {
     const key = 'dataset/507f1f77bcf86cd799439099/foreign.png';

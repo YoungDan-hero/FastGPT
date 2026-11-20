@@ -90,8 +90,15 @@ export const CreateDatasetBodySchema = z.object({
     deprecated: true
   }),
   apiDatasetServer: ApiDatasetServerSchema.optional().meta({
-    description: '第三方知识库服务器配置(API/飞书/语雀/钉钉)'
+    description:
+      '第三方知识库服务器配置(API/飞书/语雀/钉钉)。飞书知识库用 feishuApp 配置 App ID 与密钥，每次导入时填写来源链接。旧版 feishuLink 创建入参仍可用'
   }),
+  chunkSettings: ChunkSettingsSchema.pick({ autoIndexes: true, imageIndex: true })
+    .optional()
+    .meta({
+      description: '创建飞书知识库时，初次导入的补充索引和图片索引选项',
+      example: { autoIndexes: true, imageIndex: true }
+    }),
   sangforFileParseConfig: sangforFileParseConfigSchema.optional().meta({
     description: '外部文档解析开关(页眉页脚/附录/图片识别/图转表),仅对 customPdfParse 解析路径生效'
   }),

@@ -106,7 +106,7 @@ const Info = () => {
             <Box flex={'0 0 330px'}>
               <MyInfo onOpenContact={onOpenContact} />
               <Box>
-                <Other onOpenContact={onOpenContact} />
+                <Other />
               </Box>
             </Box>
             {!!standardPlan && (
@@ -121,7 +121,7 @@ const Info = () => {
           <>
             <MyInfo onOpenContact={onOpenContact} />
             {standardPlan && <PlanUsage />}
-            <Other onOpenContact={onOpenContact} />
+            <Other />
           </>
         )}
       </Box>
@@ -866,7 +866,7 @@ const ButtonStyles = {
   userSelect: 'none' as any,
   fontSize: 'sm'
 };
-const Other = ({ onOpenContact }: { onOpenContact: () => void }) => {
+const Other = () => {
   const { feConfigs, setNotSufficientModalType, subPlans } = useSystemStore();
   const { teamPlanStatus, userInfo } = useUserStore();
   const { t } = useSafeTranslation();
@@ -936,19 +936,6 @@ const Other = ({ onOpenContact }: { onOpenContact: () => void }) => {
                 <Box flex={1}>{item.name}</Box>
               </Flex>
             ))}
-        {feConfigs?.concatMd && (
-          <Flex onClick={onOpenContact} {...ButtonStyles}>
-            <MyIcon
-              name={'common/quickActionPhone'}
-              w={'18px'}
-              h={'18px'}
-              color={'myGray.600'}
-              fill={'none'}
-              flexShrink={0}
-            />
-            <Box flex={1}>{t('account_info:contact_us')}</Box>
-          </Flex>
-        )}
         {feConfigs?.show_workorder && (
           <Flex onClick={onFeedback} {...ButtonStyles}>
             <MyIcon

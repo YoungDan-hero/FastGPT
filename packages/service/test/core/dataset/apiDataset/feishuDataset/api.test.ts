@@ -161,6 +161,20 @@ describe('listFiles', () => {
   });
 });
 
+describe('verifyFolderAccess', () => {
+  it('validates the first page without following pagination', async () => {
+    mocks.request.mockResolvedValueOnce(ok({ files: [], has_more: true, next_page_token: 'next' }));
+    await expect(provider().verifyFolderAccess()).resolves.toBeUndefined();
+    expect(mocks.request).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({
+        method: 'GET',
+        url: '/open-apis/drive/v1/files',
+        params: { folder_token: 'root', page_size: 1 }
+      })
+    );
+  });
+});
+
 describe('getFileDetail', () => {
   it.each(['docx', 'folder'])('把 %s 元数据转换为统一详情', async (docType) => {
     if (docType === 'folder') mocks.request.mockRejectedValueOnce({ response: { status: 404 } });

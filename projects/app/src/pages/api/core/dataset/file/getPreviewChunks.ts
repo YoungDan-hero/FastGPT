@@ -1,6 +1,9 @@
 import { NextAPI } from '@/service/middleware/entry';
 import { CommonErrEnum } from '@fastgpt/global/common/error/code/common';
-import { DatasetSourceReadTypeEnum } from '@fastgpt/global/core/dataset/constants';
+import {
+  DatasetCollectionTypeEnum,
+  DatasetSourceReadTypeEnum
+} from '@fastgpt/global/core/dataset/constants';
 import {
   computedCollectionChunkSettings,
   getLLMMaxChunkSize,
@@ -16,7 +19,11 @@ import { getTeamModelHandle } from '@fastgpt/service/core/ai/model/catalog/servi
 import { getDatasetModelReference } from '@fastgpt/service/core/dataset/model';
 import { rawText2Chunks, readDatasetSourceRawText } from '@fastgpt/service/core/dataset/read';
 import { authDatasetFileKey } from '@fastgpt/service/support/permission/auth/file';
-import { authDataset } from '@fastgpt/service/support/permission/dataset/auth';
+import {
+  authDataset,
+  authDatasetCollection
+} from '@fastgpt/service/support/permission/dataset/auth';
+import { assertCanImportFeishuSource } from '@fastgpt/service/core/dataset/apiDataset/auth';
 import { getDatasetIultmzhFileParseConfig } from '@fastgpt/service/thirdProvider/sangfor/parseConfig';
 
 import {
@@ -40,6 +47,8 @@ async function handler(
     selector,
     datasetId,
     externalFileId,
+    feishuSourceUrl,
+    collectionId,
     ...chunkSettings
   } = parseApiInput({ req, bodySchema: GetPreviewChunksBodySchema }).body;
 
@@ -65,7 +74,7 @@ async function handler(
         })
       : undefined;
 
-  const { dataset, teamId, tmbId } = await authDataset({
+  const { dataset, teamId, tmbId, authType } = await authDataset({
     req,
     authApiKey: true,
     authToken: true,
@@ -76,6 +85,29 @@ async function handler(
   if (fileAuthRes && String(fileAuthRes.tmbId) !== String(tmbId) && !fileAuthRes.isRoot) {
     return Promise.reject(CommonErrEnum.unAuthFile);
   }
+  const previewFeishuUrl = await (async () => {
+    if (type !== DatasetSourceReadTypeEnum.apiFile) return;
+    if (feishuSourceUrl) {
+      assertCanImportFeishuSource({ dataset, authType, tmbId });
+      return feishuSourceUrl;
+    }
+    if (!collectionId) return;
+    const { collection } = await authDatasetCollection({
+      req,
+      collectionId,
+      authToken: true,
+      authApiKey: true,
+      per: WritePermissionVal
+    });
+    if (
+      String(collection.datasetId) !== datasetId ||
+      collection.type !== DatasetCollectionTypeEnum.apiFile ||
+      collection.apiFileId !== sourceId
+    ) {
+      throw CommonErrEnum.unAuthFile;
+    }
+    return collection.feishuSourceUrl;
+  })();
   const modelHandle = await getTeamModelHandle({ teamId });
   const agentModelData = modelHandle.getModelData(getDatasetModelReference(dataset, 'agent'), {
     type: 'llm'
@@ -99,6 +131,11 @@ async function handler(
     // 解析开关仅对外部解析路径生效;非 customPdfParse 时传 undefined,rawText 缓存沿用旧 key
     sangforFileParseConfig: customPdfParse ? getDatasetIultmzhFileParseConfig(dataset) : undefined,
     apiDatasetServer: dataset.apiDatasetServer,
+    apiDatasetOptions: {
+      feishuSourceUrl: previewFeishuUrl,
+      feishuActor: { teamId: String(teamId), tmbId: String(dataset.tmbId) }
+    },
+    imageIndex: formatChunkSettings.imageIndex,
     datasetId
   });
 

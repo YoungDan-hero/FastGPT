@@ -1,5 +1,5 @@
 'use client';
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Box, Flex, Button, InputGroup, InputLeftElement, Input } from '@chakra-ui/react';
 import { useRouter } from 'next/router';
 import { useSafeTranslation } from '@fastgpt/web/hooks/useSafeTranslation';
@@ -24,7 +24,6 @@ import {
 } from '@/web/core/dataset/api/collaborator';
 import { useSystem } from '@fastgpt/web/hooks/useSystem';
 import { type CreateDatasetType } from '@/pageComponents/dataset/list/CreateModal';
-import { resolveDatasetCreateAction } from '@/pageComponents/dataset/list/commercialDatasetTypes';
 import { DatasetTypeEnum } from '@fastgpt/global/core/dataset/constants';
 import MyBox from '@fastgpt/web/components/common/MyBox';
 import { useSystemStore } from '@/web/common/system/useSystemStore';
@@ -34,7 +33,6 @@ import {
   normalizeParentId
 } from '@fastgpt/global/common/parentFolder/depth';
 import { ReadRoleVal } from '@fastgpt/global/support/permission/constant';
-import ProModal from '@/components/ProTip/ProModal';
 import DatasetListFilters from '@/pageComponents/dataset/list/ListFilters';
 
 const EditFolderModal = dynamic(
@@ -75,18 +73,6 @@ const Dataset = () => {
 
   const [editFolderData, setEditFolderData] = useState<EditFolderFormType>();
   const [createDatasetType, setCreateDatasetType] = useState<CreateDatasetType>();
-  const [proModalOpen, setProModalOpen] = useState(false);
-
-  const onSelectDatasetType = useCallback(
-    (type: CreateDatasetType) => {
-      if (resolveDatasetCreateAction(type, feConfigs?.isPlus) === 'proModal') {
-        setProModalOpen(true);
-        return;
-      }
-      setCreateDatasetType(type);
-    },
-    [feConfigs?.isPlus]
-  );
 
   const RenderSearchInput = useMemo(
     () => (
@@ -197,62 +183,18 @@ const Dataset = () => {
                             icon: 'core/dataset/commonDatasetColor',
                             label: t('dataset:common_dataset'),
                             description: t('dataset:common_dataset_desc'),
-                            onClick: () => onSelectDatasetType(DatasetTypeEnum.dataset)
+                            onClick: () => setCreateDatasetType(DatasetTypeEnum.dataset)
                           },
-                          {
-                            icon: 'core/dataset/websiteDatasetColor',
-                            label: t('dataset:website_dataset'),
-                            description: t('dataset:website_dataset_desc'),
-                            onClick: () => onSelectDatasetType(DatasetTypeEnum.websiteDataset)
-                          },
-                          {
-                            icon: 'core/dataset/otherDataset',
-                            label: t('dataset:other_dataset'),
-                            description: t('dataset:external_other_dataset_desc'),
-                            menuList: [
-                              {
-                                children: [
-                                  {
-                                    icon: 'core/dataset/externalDatasetColor',
-                                    label: t('dataset:api_file'),
-                                    description: t('dataset:external_file_dataset_desc'),
-                                    onClick: () => onSelectDatasetType(DatasetTypeEnum.apiDataset)
-                                  },
-                                  ...(feConfigs?.show_dataset_feishu !== false
-                                    ? [
-                                        {
-                                          icon: 'core/dataset/feishuDatasetColor',
-                                          label: t('dataset:feishu_dataset'),
-                                          description: t('dataset:feishu_dataset_desc'),
-                                          onClick: () => onSelectDatasetType(DatasetTypeEnum.feishu)
-                                        }
-                                      ]
-                                    : []),
-                                  ...(feConfigs?.show_dataset_yuque !== false
-                                    ? [
-                                        {
-                                          icon: 'core/dataset/yuqueDatasetColor',
-                                          label: t('dataset:yuque_dataset'),
-                                          description: t('dataset:yuque_dataset_desc'),
-                                          onClick: () => onSelectDatasetType(DatasetTypeEnum.yuque)
-                                        }
-                                      ]
-                                    : []),
-                                  ...(feConfigs?.show_dataset_dingtalk !== false
-                                    ? [
-                                        {
-                                          icon: 'core/dataset/dingtalkDatasetColor',
-                                          label: t('dataset:dingtalk_dataset'),
-                                          description: t('dataset:dingtalk_dataset_desc'),
-                                          onClick: () =>
-                                            onSelectDatasetType(DatasetTypeEnum.dingtalk)
-                                        }
-                                      ]
-                                    : [])
-                                ]
-                              }
-                            ]
-                          }
+                          ...(feConfigs?.show_dataset_feishu !== false
+                            ? [
+                                {
+                                  icon: 'core/dataset/feishuDatasetColor',
+                                  label: t('dataset:feishu_dataset'),
+                                  description: t('dataset:feishu_dataset_desc'),
+                                  onClick: () => setCreateDatasetType(DatasetTypeEnum.feishu)
+                                }
+                              ]
+                            : [])
                         ]
                       },
                       {
@@ -361,9 +303,6 @@ const Dataset = () => {
           onClose={() => setCreateDatasetType(undefined)}
           parentId={parentId || undefined}
         />
-      )}
-      {!feConfigs?.isPlus && (
-        <ProModal isOpen={proModalOpen} onClose={() => setProModalOpen(false)} />
       )}
     </Flex>
   );

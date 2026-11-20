@@ -80,13 +80,15 @@ const Upload = () => {
           .filter((item) => item.apiFile)
           .map((item) => item.apiFile!);
 
-        const { failedCount } = await postCreateDatasetApiDatasetCollection({
+        const feishuSourceUrl = filterWaitingSources[0]?.feishuSourceUrl;
+        const { failedCount, successCount } = await postCreateDatasetApiDatasetCollection({
           ...data,
           parentId,
           datasetId: datasetDetail._id,
 
           customPdfParse,
-          apiFiles
+          apiFiles,
+          feishuSourceUrl
         });
 
         // 服务端对「部分节点没进去」仍返回 200（已建成的目录/文件不回滚，重试幂等），
@@ -95,6 +97,9 @@ const Upload = () => {
           throw new Error(
             t('common:core.dataset.import.api_dataset_partial_failed', { failedCount })
           );
+        }
+        if (feishuSourceUrl && successCount === 0) {
+          throw new Error(t('dataset:feishu_no_new_files'));
         }
       } else {
         // Batch create collection and upload chunks

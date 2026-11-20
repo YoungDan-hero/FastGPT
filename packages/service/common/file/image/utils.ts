@@ -63,7 +63,7 @@ const BASE64_PREFIX_MAP: Record<string, string> = {
 
 const DEFAULT_IMAGE_TYPE = 'image/jpeg';
 const DEFAULT_IMAGE_DOWNLOAD_TIMEOUT_MS = 180 * 1000;
-const DEFAULT_IMAGE_DOWNLOAD_MAX_SIZE = 10 * 1024 * 1024;
+export const DEFAULT_IMAGE_DOWNLOAD_MAX_SIZE = 10 * 1024 * 1024;
 const DEFAULT_IMAGE_BASE64_MAX_BUFFER_SIZE = DEFAULT_IMAGE_DOWNLOAD_MAX_SIZE;
 
 export class ImageDownloadTooLargeError extends Error {

@@ -5,6 +5,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { Simulate } from 'react-dom/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import FeishuAccess from '@/pageComponents/account/team/FeishuAccess';
+import FeishuDatasetCollaborators from '@/pageComponents/dataset/detail/Info/components/FeishuDatasetCollaborators';
 import type { FeishuAccessResponse } from '@fastgpt/global/openapi/support/user/team/org/api';
 
 const mocks = vi.hoisted(() => ({
@@ -25,6 +26,10 @@ vi.mock('@fastgpt/web/components/common/Icon', async () => {
   const { forwardRef } = await import('react');
   return { default: forwardRef(() => null) };
 });
+vi.mock('@fastgpt/web/components/v2/common/MyModal', () => ({
+  default: ({ children, footer }: { children: React.ReactNode; footer: React.ReactNode }) =>
+    React.createElement('section', { role: 'dialog' }, children, footer)
+}));
 vi.mock('next-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key, i18n: { language: 'zh-CN' } })
 }));
@@ -168,5 +173,51 @@ describe('Feishu organization authorization', () => {
     expect(button('保存授权').disabled).toBe(true);
     expect(button('移除授权').disabled).toBe(true);
     expect(host.textContent).toContain('暂无可选Agent');
+  });
+
+  it('uses the current dataset for sidebar reads and grants from its dialog', async () => {
+    const datasetId = choices.dataset[0].id;
+    mocks.get.mockClear();
+    mocks.get.mockResolvedValue({
+      ...choices,
+      collaborators: [
+        { ...choices.departments[1], principal: 'department', role: 'manage', inherited: false }
+      ]
+    });
+    await act(async () =>
+      root.render(
+        React.createElement(
+          ChakraProvider,
+          null,
+          React.createElement(FeishuDatasetCollaborators, { datasetId })
+        )
+      )
+    );
+
+    expect(host.textContent).toContain('市场部');
+    await click('user:team.manage_collaborators');
+    expect(host.querySelector('[role="dialog"]')?.textContent).toContain('产品知识库');
+    await choose('选择飞书部门或员工', '员工 · 小周', '小周');
+    mocks.get.mockResolvedValue({
+      ...choices,
+      collaborators: [
+        { ...choices.members[0], principal: 'member', role: 'read', inherited: false }
+      ]
+    });
+    await click('保存授权');
+
+    expect(mocks.post).toHaveBeenCalledExactlyOnceWith(endpoint, {
+      principal: 'member',
+      principalId: choices.members[0].id,
+      resource: 'dataset',
+      resourceId: datasetId,
+      role: 'read'
+    });
+    expect(mocks.get.mock.calls).toEqual([
+      [endpoint, { datasetId }],
+      [endpoint, { datasetId }],
+      [endpoint, { datasetId }]
+    ]);
+    expect(host.textContent).toContain('小周');
   });
 });

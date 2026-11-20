@@ -181,9 +181,9 @@ describe('getDatasetImageTrainingMode', () => {
   });
 });
 
-describe('getTrainingModeByCollection', () => {
+describe.each([false, true])('getTrainingModeByCollection with commercial license = %s', (isPro) => {
   beforeEach(() => {
-    setTestProLicense(true);
+    setTestProLicense(isPro);
   });
 
   it('图片自动索引有 VLM 或原生 embedding 图片索引能力时进入 image 队列', async () => {

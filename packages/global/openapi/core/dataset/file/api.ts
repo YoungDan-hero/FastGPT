@@ -5,6 +5,7 @@ import { ChunkSettingsSchema } from '../../../../core/dataset/type';
 import { CreatePostPresignedUrlResponseSchema } from '../../../../common/file/s3/type';
 import { IntSchema, NumSchema } from '../../../../common/zod';
 import { minChunkSize } from '../../../../core/dataset/training/utils';
+import { FeishuSourceUrlSchema } from '../../../../core/dataset/apiDataset/type';
 
 const PreviewChunkSplitterSchema = z
   .string()
@@ -65,6 +66,10 @@ export const GetPreviewChunksBodySchema = PreviewChunkSettingsSchema.extend({
   sourceId: z.string().nonempty().meta({
     example: '68ad85a7463006c963799a05',
     description: '数据源 ID（文件 ID / 链接 / 外部文件 / API 文件等）'
+  }),
+  feishuSourceUrl: FeishuSourceUrlSchema.optional(),
+  collectionId: ObjectIdSchema.optional().meta({
+    description: '重训已有 API 文件时，从该集合读取已保存的来源'
   }),
   customPdfParse: z.boolean().optional().meta({
     description: '是否启用自定义 PDF 解析'

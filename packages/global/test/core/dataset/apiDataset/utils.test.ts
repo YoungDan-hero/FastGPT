@@ -1,11 +1,49 @@
 import { describe, it, expect } from 'vitest';
 import {
   filterApiDatasetServerPublicData,
+  parseFeishuResourceLink,
   toApiDatasetSuccess,
   toApiDatasetError,
   classifyApiDatasetError
 } from '@fastgpt/global/core/dataset/apiDataset/utils';
 import type { ApiDatasetServerType } from '@fastgpt/global/core/dataset/apiDataset/type';
+
+describe('parseFeishuResourceLink', () => {
+  it('extracts the document id and removes unrelated share parameters', () => {
+    expect(
+      parseFeishuResourceLink(' https://tenant.feishu.cn/docx/doccn123/?from=share#block ')
+    ).toMatchObject({
+      type: 'docx',
+      token: 'doccn123',
+      url: 'https://tenant.feishu.cn/docx/doccn123'
+    });
+  });
+
+  it('retains the table and view selected by a Base link', () => {
+    expect(
+      parseFeishuResourceLink(
+        'https://tenant.feishu.cn/base/bas123?from=share&table=tbl7&view=vew8'
+      )
+    ).toMatchObject({
+      type: 'base',
+      token: 'bas123',
+      tableId: 'tbl7',
+      viewId: 'vew8',
+      url: 'https://tenant.feishu.cn/base/bas123?table=tbl7&view=vew8'
+    });
+  });
+
+  it.each([
+    '',
+    'https://tenant.feishu.cn/drive/folder/fldcn123',
+    'https://feishu.cn.example.com/docx/doc123',
+    'https://tenant.feishu.cn/docx/doc%2fcn123',
+    'https://tenant.feishu.cn/base/bas123?table=wrong',
+    'https://tenant.feishu.cn/base/bas123?view=vew8'
+  ])('rejects an invalid source %s', (input) => {
+    expect(parseFeishuResourceLink(input)).toBeUndefined();
+  });
+});
 
 describe('filterApiDatasetServerPublicData', () => {
   it('should return undefined when apiDatasetServer is undefined', () => {
@@ -89,6 +127,14 @@ describe('filterApiDatasetServerPublicData', () => {
       },
       dingtalkServer: undefined
     });
+  });
+
+  it('omits the stored secret from a Feishu link configuration', () => {
+    const url = 'https://tenant.feishu.cn/docx/doc123';
+    const result = filterApiDatasetServerPublicData({
+      feishuLink: { url, appId: 'cli_example', appSecret: 'stored-ciphertext' }
+    });
+    expect(result?.feishuLink).toEqual({ url, appId: 'cli_example' });
   });
 
   it('should handle servers with optional fields as undefined', () => {

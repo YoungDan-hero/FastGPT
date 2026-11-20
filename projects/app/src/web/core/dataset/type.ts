@@ -34,6 +34,7 @@ export type ImportSourceItemType = {
 
   // api dataset
   apiFileId?: string;
+  feishuSourceUrl?: string;
   apiFile?: APIFileItemType;
 };
 

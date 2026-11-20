@@ -87,7 +87,7 @@ describe('Domain default config and overrides validation', () => {
   });
   it('returns complete default config for any domain', () => {
     const siteConfig = getDomainDefaultConfig('site');
-    expect(siteConfig.name).toBe('AI');
+    expect(siteConfig.name).toBe('Maiya Studio');
     expect(siteConfig.docUrl).toBe('https://doc.fastgpt.io');
 
     const performanceConfig = getDomainDefaultConfig('performance');

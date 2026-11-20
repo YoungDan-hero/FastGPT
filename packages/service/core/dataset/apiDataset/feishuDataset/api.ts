@@ -138,26 +138,42 @@ export const useFeishuDatasetRequest = ({ feishuServer }: { feishuServer: Feishu
       .catch((err) => responseError(err));
   };
 
+  const fetchFolderPage = async ({
+    folderToken,
+    pageSize,
+    pageToken
+  }: {
+    folderToken: string;
+    pageSize: number;
+    pageToken?: string;
+  }) => {
+    const data = await request<FeishuFileListResponse>(
+      '/open-apis/drive/v1/files',
+      { folder_token: folderToken, page_size: pageSize, page_token: pageToken },
+      'GET'
+    );
+    if (!data || !Array.isArray(data.files)) {
+      throw new Error('飞书文件列表响应缺失或格式错误');
+    }
+    return data;
+  };
+
+  /** 创建时只读取首条目录记录，确认应用可访问所选文件夹。 */
+  const verifyFolderAccess = async () => {
+    await fetchFolderPage({ folderToken: feishuServer.folderToken, pageSize: 1 });
+  };
+
   const listFiles = async ({
     parentId
   }: {
     parentId?: ParentIdType;
   }): Promise<APIFileItemType[]> => {
     const fetchFiles = async (pageToken?: string): Promise<FeishuFileListResponse['files']> => {
-      const data = await request<FeishuFileListResponse>(
-        `/open-apis/drive/v1/files`,
-        {
-          folder_token: parentId || feishuServer.folderToken,
-          page_size: 200,
-          page_token: pageToken
-        },
-        'GET'
-      );
-
-      if (!data || !Array.isArray(data.files)) {
-        throw new Error('飞书文件列表响应缺失或格式错误');
-      }
-
+      const data = await fetchFolderPage({
+        folderToken: parentId || feishuServer.folderToken,
+        pageSize: 200,
+        pageToken
+      });
       if (data.has_more) {
         const nextFiles = await fetchFiles(data.next_page_token);
         return [...data.files, ...nextFiles];
@@ -316,6 +332,7 @@ export const useFeishuDatasetRequest = ({ feishuServer }: { feishuServer: Feishu
   return {
     getFileContent,
     listFiles,
+    verifyFolderAccess,
     getFilePreviewUrl,
     getFileDetail,
     getFileRawId

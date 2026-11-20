@@ -17,6 +17,8 @@ const mocks = vi.hoisted(() => ({
   getModel: vi.fn(),
   findModel: vi.fn(),
   sign: vi.fn(),
+  inline: vi.fn(),
+  loadImage: vi.fn(),
   recall: vi.fn()
 }));
 vi.mock('@fastgpt/service/core/dataset/entity', () => ({
@@ -39,7 +41,14 @@ vi.mock('@fastgpt/service/core/ai/model/catalog/service', () => ({
   getTeamModelHandle: mocks.getHandle
 }));
 vi.mock('@fastgpt/service/common/s3/sources/dataset', () => ({
-  getS3DatasetSource: () => ({ createExternalUrl: mocks.sign })
+  getS3DatasetSource: () => ({
+    createExternalUrl: mocks.sign,
+    getDatasetBase64Image: mocks.loadImage
+  })
+}));
+vi.mock('@fastgpt/service/core/dataset/search/utils', async (original) => ({
+  ...(await original<typeof import('@fastgpt/service/core/dataset/search/utils')>()),
+  shouldInlineDatasetImage: mocks.inline
 }));
 vi.mock('@fastgpt/service/core/dataset/search', () => ({ defaultSearchDatasetData: mocks.recall }));
 
@@ -78,6 +87,7 @@ beforeEach(() => {
   }));
   mocks.findModel.mockReturnValue({ modelId: 'vision', isActive: true });
   mocks.sign.mockResolvedValue({ url: 'https://files.test/image' });
+  mocks.inline.mockReturnValue(false);
 });
 
 describe('createDatasetSearchRuntime', () => {
@@ -242,6 +252,21 @@ describe('createDatasetSearchRuntime', () => {
     });
     expect(runtime.recall).toBe(mocks.recall);
     expect(mocks.getTmbInfo).not.toHaveBeenCalled();
+  });
+
+  it('reads authorized temporary images from storage for local model requests', async () => {
+    mocks.inline.mockReturnValue(true);
+    mocks.loadImage.mockResolvedValueOnce('data:image/png;base64,fixture');
+    const runtime = createDatasetSearchRuntime();
+
+    await expect(runtime.images.createQueryUrl({ key: 'temp/team/image.png' })).resolves.toBe(
+      'data:image/png;base64,fixture'
+    );
+    expect(mocks.loadImage).toHaveBeenCalledExactlyOnceWith(
+      'temp/team/image.png',
+      10 * 1024 * 1024
+    );
+    expect(mocks.sign).not.toHaveBeenCalled();
   });
 
   it('shares one pending member read across 100 concurrent datasets, collections and model authorization', async () => {

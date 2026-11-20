@@ -29,7 +29,7 @@ import {
 export const LoginPath: OpenAPIPath = {
   '/support/user/account/login/feishu/start': {
     get: {
-      summary: '开始飞书组织登录',
+      summary: '开始飞书组织登录或文档读取授权',
       tags: [DevApiTagsMap.userLogin],
       requestParams: { query: FeishuOrgLoginStartQuerySchema },
       responses: { 302: { description: '跳转到飞书授权页' } }
@@ -37,10 +37,14 @@ export const LoginPath: OpenAPIPath = {
   },
   '/support/user/account/login/feishu/callback': {
     get: {
-      summary: '完成飞书组织登录',
+      summary: '完成飞书组织登录或文档读取授权',
       tags: [DevApiTagsMap.userLogin],
       requestParams: { query: FeishuOrgLoginCallbackQuerySchema },
-      responses: { 303: { description: '跳转到 FastGPT' } }
+      responses: {
+        200: { description: '文档读取授权成功' },
+        303: { description: '跳转到 FastGPT' },
+        403: { description: '文档读取授权失败' }
+      }
     }
   },
   '/support/user/account/login/verification/config': {

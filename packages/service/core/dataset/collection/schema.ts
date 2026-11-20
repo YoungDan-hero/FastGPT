@@ -64,6 +64,7 @@ const DatasetCollectionSchema = new Schema({
   rawLink: String,
   // Api collection
   apiFileId: String,
+  feishuSourceUrl: String,
   // external collection(Abandoned)
   externalFileId: String,
   externalFileUrl: String, // external import url

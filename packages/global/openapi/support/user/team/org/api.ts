@@ -12,13 +12,40 @@ export const FeishuAccessBodySchema = z.object({
 });
 export type FeishuAccessBody = z.infer<typeof FeishuAccessBodySchema>;
 
+/* ============================================================================
+ * API: 查询飞书授权选项和知识库协作者
+ * Route: GET /api/support/user/team/feishu/access
+ * Method: GET
+ * Description: 提供飞书组织授权选项，传入知识库 ID 时返回该库及其协作者。
+ * Tags: ['团队组织', '知识库权限管理']
+ * ============================================================================ */
+export const FeishuAccessQuerySchema = z.object({
+  datasetId: ObjectIdSchema.optional().meta({
+    description: '只查询这个知识库及其飞书协作者',
+    example: '68ad85a7463006c963799a05'
+  })
+});
+export type FeishuAccessQuery = z.infer<typeof FeishuAccessQuerySchema>;
+
 const FeishuAccessOption = z.object({ id: ObjectIdSchema, name: z.string() });
+const FeishuAccessCollaboratorSchema = FeishuAccessOption.extend({
+  principal: FeishuAccessBodySchema.shape.principal.meta({ description: '部门或员工' }),
+  role: z
+    .enum(['read', 'write', 'manage', 'owner'])
+    .meta({ description: '协作者在知识库中的角色' }),
+  inherited: BoolSchema.meta({ description: '该协作者是否含从父文件夹继承的权限' })
+});
+export type FeishuAccessCollaborator = z.infer<typeof FeishuAccessCollaboratorSchema>;
+
 export const FeishuAccessResponseSchema = z.object({
   departments: z.array(FeishuAccessOption),
   members: z.array(FeishuAccessOption),
   app: z.array(FeishuAccessOption),
   dataset: z.array(FeishuAccessOption),
-  collection: z.array(FeishuAccessOption)
+  collection: z.array(FeishuAccessOption),
+  collaborators: z.array(FeishuAccessCollaboratorSchema).optional().meta({
+    description: '当前知识库的飞书协作者，传入 datasetId 时返回'
+  })
 });
 export type FeishuAccessResponse = z.infer<typeof FeishuAccessResponseSchema>;
 

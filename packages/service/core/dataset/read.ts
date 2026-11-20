@@ -8,7 +8,7 @@ import type { IultmzhFileParseConfigType } from '@fastgpt/global/core/dataset/ty
 import { urlsFetch } from '../../common/string/cheerio';
 import { type TextSplitProps } from '../../common/string/textSplitter';
 import { readFileContentBySource } from '../../common/file/read/utils';
-import { getApiDatasetRequest } from './apiDataset';
+import { getApiDatasetRequest, type ApiDatasetRequestOptions } from './apiDataset';
 import { chunkByIultmzh } from '../../thirdProvider/sangfor/chunk';
 import { serviceEnv } from '../../env';
 import Papa from 'papaparse';
@@ -23,6 +23,7 @@ import { DatasetErrEnum } from '@fastgpt/global/common/error/code/dataset';
 import { getBackendFileOperationTimeoutMs } from '../../common/file/parseTimeout';
 import { createExternalHttpFileSource } from '../../common/file/read/source';
 import { getTeamFileSizeLimitBytes } from '../../support/permission/fileLimit';
+import { MongoDataset } from './schema';
 
 const datasetCsvColumnTypes = new Set(['q', 'a', 'index', 'indexes', 'metadata']);
 
@@ -126,6 +127,8 @@ export const readDatasetSourceRawText = async ({
   selector,
   externalFileId,
   apiDatasetServer,
+  apiDatasetOptions,
+  imageIndex,
   customPdfParse,
   sangforFileParseConfig,
   getFormatText,
@@ -144,6 +147,8 @@ export const readDatasetSourceRawText = async ({
   selector?: string; // link selector
   externalFileId?: string; // external file dataset
   apiDatasetServer?: ApiDatasetServerType; // api dataset
+  apiDatasetOptions?: ApiDatasetRequestOptions;
+  imageIndex?: boolean;
   usageId?: string;
   datasetId: string; // For S3 image upload
 }): Promise<{
@@ -207,6 +212,8 @@ export const readDatasetSourceRawText = async ({
   } else if (type === DatasetSourceReadTypeEnum.apiFile) {
     const { title, rawText } = await readApiServerFileContent({
       apiDatasetServer,
+      apiDatasetOptions,
+      imageIndex,
       apiFileId: sourceId,
       teamId,
       tmbId,
@@ -228,6 +235,8 @@ export const readDatasetSourceRawText = async ({
 
 export const readApiServerFileContent = async ({
   apiDatasetServer,
+  apiDatasetOptions,
+  imageIndex,
   apiFileId,
   teamId,
   tmbId,
@@ -237,6 +246,8 @@ export const readApiServerFileContent = async ({
   usageId
 }: {
   apiDatasetServer?: ApiDatasetServerType;
+  apiDatasetOptions?: ApiDatasetRequestOptions;
+  imageIndex?: boolean;
   apiFileId: string;
   teamId: string;
   tmbId: string;
@@ -248,10 +259,30 @@ export const readApiServerFileContent = async ({
   title?: string;
   rawText: string;
 }> => {
-  return (await getApiDatasetRequest(apiDatasetServer)).getFileContent({
+  // 预览、导入和同步都使用已保存的来源所属员工的授权。
+  const dataset =
+    !apiDatasetOptions?.feishuActor && apiDatasetServer?.feishuLink
+      ? await MongoDataset.findOne(
+          {
+            _id: datasetId,
+            teamId,
+            'apiDatasetServer.feishuLink.url': apiDatasetServer.feishuLink.url
+          },
+          'tmbId'
+        ).lean()
+      : undefined;
+  return (
+    await getApiDatasetRequest(apiDatasetServer, {
+      ...apiDatasetOptions,
+      feishuActor:
+        apiDatasetOptions?.feishuActor ??
+        (dataset ? { teamId, tmbId: String(dataset.tmbId) } : undefined)
+    })
+  ).getFileContent({
     teamId,
     tmbId,
     apiFileId,
+    imageIndex,
     customPdfParse,
     sangforFileParseConfig,
     datasetId,

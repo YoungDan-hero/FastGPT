@@ -110,6 +110,7 @@ export const applyLegacyApiFileFolders = async ({
  */
 export const createApiDatasetCollection = async ({
   apiFiles,
+  feishuSourceUrl,
   authorizeChanges,
   customPdfParse,
   modelAuthContext,
@@ -141,7 +142,14 @@ export const createApiDatasetCollection = async ({
     dataset.apiDatasetServer?.feishuServer?.folderToken ||
     dataset.apiDatasetServer?.dingtalkServer?.rootNodeId;
 
-  const request = await getApiDatasetRequest(dataset.apiDatasetServer);
+  const isFeishuSource = Boolean(feishuSourceUrl || dataset.apiDatasetServer?.feishuLink);
+  const request = await (isFeishuSource
+    ? getApiDatasetRequest(dataset.apiDatasetServer, {
+        feishuActor: { teamId: String(dataset.teamId), tmbId: String(dataset.tmbId) },
+        feishuSourceUrl
+      })
+    : getApiDatasetRequest(dataset.apiDatasetServer));
+  const sourceUrl = 'sourceUrl' in request ? request.sourceUrl : undefined;
 
   // 1. 本地快照同时用于幂等匹配、旧目录识别与后续移动计划。
   const localCollections = await MongoDatasetCollection.find(
@@ -162,6 +170,16 @@ export const createApiDatasetCollection = async ({
   );
   // V2 根信息来自客户端。兼容旧目录前使用真实详情更新类型和 hasChild，防止旧页面信息漏掉子树。
   const seeds = await (async () => {
+    if (isFeishuSource) {
+      const files = await request.listFiles({});
+      if (apiFiles.some((item) => item.id === RootCollectionId)) return files;
+      const byId = new Map(files.map((item) => [item.id, item]));
+      return apiFiles.map(({ id }) => {
+        const file = byId.get(id);
+        if (!file) throw new UserError('Unlinked Feishu file', '当前飞书链接不包含该来源。');
+        return file;
+      });
+    }
     if (!usesDingtalkDataset(dataset.apiDatasetServer)) return apiFiles;
     const verified: typeof apiFiles = [];
     const details = new Map<string, ReturnType<typeof request.getFileDetail>>();
@@ -271,11 +289,14 @@ export const createApiDatasetCollection = async ({
     return parentId === undefined ? undefined : parentId ? new Types.ObjectId(parentId) : null;
   };
   const buildCorrections = (): BulkMoveCollectionParentItem[] =>
-    buildApiFileParentUpdates({
-      records,
-      collections: existCollections,
-      ...parentOptions
-    }).map((item) => ({
+    (feishuSourceUrl
+      ? []
+      : buildApiFileParentUpdates({
+          records,
+          collections: existCollections,
+          ...parentOptions
+        })
+    ).map((item) => ({
       ...item,
       datasetId: String(dataset._id),
       newParentId: item.newParentId ? new Types.ObjectId(item.newParentId) : null
@@ -286,13 +307,15 @@ export const createApiDatasetCollection = async ({
     ...idMap,
     ...folderPlan.map(({ record, id }) => [record.apiFileId, String(id)] as const)
   ]);
-  const plannedMoves = buildApiFileParentUpdates({
-    records,
-    collections: existCollections,
-    idMap: plannedIdMap,
-    targetParentId,
-    rootParentIds: legacyPlan.rootParentIds
-  });
+  const plannedMoves = feishuSourceUrl
+    ? []
+    : buildApiFileParentUpdates({
+        records,
+        collections: existCollections,
+        idMap: plannedIdMap,
+        targetParentId,
+        rootParentIds: legacyPlan.rootParentIds
+      });
   const newFolders = folderPlan.map(({ record, id }) => ({
     id: String(id),
     parentId:
@@ -415,13 +438,35 @@ export const createApiDatasetCollection = async ({
 
   if (writable.length > 0) {
     try {
-      await mongoSessionRun(
+      const createdCount = await mongoSessionRun(
         async (session) => {
+          const filesToCreate = await (async () => {
+            if (!sourceUrl) return writable;
+            // 使用集合写入的同一把事务锁重新去重，同时提交同一链接也只会新增一次。
+            await lockDatasetCollectionPermissionState({
+              teamId,
+              datasetId: String(dataset._id),
+              session
+            });
+            const existing = await MongoDatasetCollection.find(
+              {
+                teamId,
+                datasetId: dataset._id,
+                apiFileId: { $in: writable.map(({ record }) => record.apiFileId) }
+              },
+              'apiFileId'
+            )
+              .session(session)
+              .lean();
+            const existingIds = new Set(existing.map((item) => item.apiFileId));
+            return writable.filter(({ record }) => !existingIds.has(record.apiFileId));
+          })();
           await createApiFileCollectionsBatch({
             dataset,
-            files: writable.map(({ record, parentId }) => ({
+            files: filesToCreate.map(({ record, parentId }) => ({
               name: record.name,
               apiFileId: record.apiFileId,
+              ...(sourceUrl && { feishuSourceUrl: sourceUrl }),
               // 归一：无 server 父级时不写该字段，与单条路径 createOneCollection 的落库形态一致
               apiFileParentId: record.apiFileParentId ?? undefined,
               parentId: parentId ? String(parentId) : undefined,
@@ -439,11 +484,12 @@ export const createApiDatasetCollection = async ({
             modelAuthContext,
             session
           });
+          return filesToCreate.length;
         },
         // 整批（4w 量级）一个事务，默认 60s 提交上限不够
         { maxCommitTimeMS: API_FILE_FILE_COMMIT_TIMEOUT_MS }
       );
-      successCount += writable.length;
+      successCount += createdCount;
     } catch (error) {
       // 事务已整体回滚，无部分成功（含配额不足、模型解析失败、事务超时）：整批计入失败。
       // 必须抛出让调用方感知 —— 客户端只在请求 reject 时才把文件标为失败，返回 200 会让

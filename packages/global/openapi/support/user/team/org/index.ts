@@ -3,6 +3,7 @@ import { DevApiTagsMap } from '../../../../tag';
 import {
   CreateOrgBodySchema,
   FeishuAccessBodySchema,
+  FeishuAccessQuerySchema,
   FeishuAccessResponseSchema,
   DeleteOrgMemberQuerySchema,
   DeleteOrgQuerySchema,
@@ -18,11 +19,12 @@ const DepartmentTags = [DevApiTagsMap.teamOrg];
 export const TeamOrgPath: OpenAPIPath = {
   '/support/user/team/feishu/access': {
     get: {
-      summary: '获取飞书部门、员工及可授权资源',
-      tags: DepartmentTags,
+      summary: '获取飞书授权选项和知识库协作者',
+      tags: [...DepartmentTags, DevApiTagsMap.datasetPermission],
+      requestParams: { query: FeishuAccessQuerySchema },
       responses: {
         200: {
-          description: '公司团队的权限配置选项',
+          description: '公司团队的权限配置选项或指定知识库的飞书协作者',
           content: { 'application/json': { schema: FeishuAccessResponseSchema } }
         }
       }

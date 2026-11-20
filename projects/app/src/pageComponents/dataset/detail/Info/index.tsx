@@ -2,6 +2,7 @@ import { type EditResourceInfoFormType } from '@/components/common/Modal/EditRes
 import DatasetTypeTag from '@/components/core/dataset/DatasetTypeTag';
 import AIModelSelector from '@/components/Select/AIModelSelector';
 import { useSystemStore } from '@/web/common/system/useSystemStore';
+import { useUserStore } from '@/web/support/user/useUserStore';
 import { getModelDetail } from '@/web/core/ai/model/modelData';
 import {
   getCollaboratorList,
@@ -17,6 +18,7 @@ import type { DatasetItemType } from '@fastgpt/global/core/dataset/type';
 import type { MyEmbeddingModelItemType } from '@fastgpt/global/openapi/core/ai/model/api';
 import { ReadRoleVal } from '@fastgpt/global/support/permission/constant';
 import { DatasetRoleList } from '@fastgpt/global/support/permission/dataset/constant';
+import { isSystemAdminUser } from '@fastgpt/global/support/user/utils';
 import Avatar from '@fastgpt/web/components/common/Avatar';
 import MyIcon from '@fastgpt/web/components/common/Icon';
 import FormLabel from '@fastgpt/web/components/common/MyBox/FormLabel';
@@ -31,6 +33,7 @@ import React, { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { useContextSelector } from 'use-context-selector';
 import MemberManager from '../../MemberManager';
+import FeishuDatasetCollaborators from './components/FeishuDatasetCollaborators';
 import type { EditAPIDatasetInfoFormType } from './components/EditApiServiceModal';
 
 const EditResourceModal = dynamic(() => import('@/components/common/Modal/EditResourceModal'));
@@ -45,7 +48,8 @@ const Info = ({ datasetId }: { datasetId: string }) => {
     hasTrainingTask,
     refreshCollectionList
   } = useContextSelector(DatasetPageContext, (v) => v);
-  const { feConfigs } = useSystemStore();
+  const { feConfigs, initDataBufferId } = useSystemStore();
+  const { userInfo } = useUserStore();
 
   const [editedDataset, setEditedDataset] = useState<EditResourceInfoFormType>();
   const [editedAPIDataset, setEditedAPIDataset] = useState<EditAPIDatasetInfoFormType>();
@@ -414,8 +418,10 @@ const Info = ({ datasetId }: { datasetId: string }) => {
                   }
                 />
               </Flex>
-              <Box fontSize={'mini'}>
-                {datasetDetail.apiDatasetServer?.feishuServer?.folderToken}
+              <Box fontSize={'mini'} noOfLines={1}>
+                {datasetDetail.apiDatasetServer?.feishuApp?.appId ??
+                  datasetDetail.apiDatasetServer?.feishuLink?.appId ??
+                  datasetDetail.apiDatasetServer?.feishuServer?.appId}
               </Box>
             </Box>
           </>
@@ -481,7 +487,14 @@ const Info = ({ datasetId }: { datasetId: string }) => {
           </>
         )}
 
-      {datasetDetail.permission.hasManagePer && (
+      {feConfigs.feishuOrgLogin && isSystemAdminUser(userInfo) && (
+        <>
+          <MyDivider my={4} h={'2px'} maxW={'500px'} />
+          <FeishuDatasetCollaborators key={datasetId} datasetId={datasetId} />
+        </>
+      )}
+
+      {initDataBufferId && !feConfigs.feishuOrgLogin && datasetDetail.permission.hasManagePer && (
         <>
           <MyDivider my={4} h={'2px'} maxW={'500px'} />
           <Box>

@@ -22,7 +22,7 @@ export type NavbarItemConfigType = z.infer<typeof NavbarItemConfigSchema>;
 export const SiteConfigSchema = z.strictObject({
   // 未配置时不猜测部署域名，浏览器内可使用相对路径；管理表单保存时必须填写。
   publicUrl: z.union([z.literal(''), SitePublicUrlSchema]).default(''),
-  name: z.string().min(1).max(100).default('AI'),
+  name: z.string().min(1).max(100).default('Maiya Studio'),
   description: z.string().max(1000).default(''),
   favicon: textWithDefault(),
   docUrl: urlWithDefault('https://doc.fastgpt.io'),

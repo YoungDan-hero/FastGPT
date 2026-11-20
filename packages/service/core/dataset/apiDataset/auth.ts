@@ -1,10 +1,36 @@
 import {
+  AuthUserTypeEnum,
   ManagePermissionVal,
   WritePermissionVal
 } from '@fastgpt/global/support/permission/constant';
 import { authDatasetCollectionMoves } from '../../../support/permission/collection/moveAuth';
 import type { AuthModeType } from '../../../support/permission/type';
 import type { ApiFileParentUpdate } from './utils';
+import { UserError } from '@fastgpt/global/common/error/utils';
+import { DatasetTypeEnum } from '@fastgpt/global/core/dataset/constants';
+import type { DatasetSchemaType } from '@fastgpt/global/core/dataset/type';
+
+/** 导入任意新链接会使用库的飞书授权，沿用飞书来源原有的创建者校验。 */
+export function assertCanImportFeishuSource({
+  dataset,
+  authType,
+  tmbId
+}: {
+  dataset: Pick<DatasetSchemaType, 'type' | 'tmbId'>;
+  authType?: `${AuthUserTypeEnum}`;
+  tmbId: string;
+}) {
+  if (
+    dataset.type !== DatasetTypeEnum.feishu ||
+    authType !== AuthUserTypeEnum.token ||
+    String(dataset.tmbId) !== String(tmbId)
+  ) {
+    throw new UserError(
+      'Cannot import a Feishu source',
+      '请由知识库创建者登录后导入新的飞书链接。'
+    );
+  }
+}
 
 export type ApiFileImportChanges = {
   /** 新建节点所在的最近已有父级；新目录由调用者创建，其下的写权限由该授权承接。 */

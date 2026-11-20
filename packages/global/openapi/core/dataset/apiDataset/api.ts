@@ -2,7 +2,8 @@ import { z } from 'zod';
 import { ObjectIdSchema } from '../../../../common/type/mongo';
 import {
   APIFileItemSchema,
-  ApiDatasetServerSchema
+  ApiDatasetServerSchema,
+  FeishuSourceUrlSchema
 } from '../../../../core/dataset/apiDataset/type';
 
 /* ============================================================================
@@ -64,6 +65,7 @@ export const GetApiDatasetFileListBodySchema = z.object({
     example: '68ad85a7463006c963799a05',
     description: '知识库 ID'
   }),
+  feishuSourceUrl: FeishuSourceUrlSchema.optional(),
   searchKey: z.string().optional().meta({
     example: '产品文档',
     description: '搜索关键词'

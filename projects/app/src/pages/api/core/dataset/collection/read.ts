@@ -117,9 +117,15 @@ async function handler(req: ApiRequestProps): Promise<ReadCollectionSourceRespon
       return collection.rawLink;
     }
     if (collection.type === DatasetCollectionTypeEnum.apiFile && collection.apiFileId) {
-      return (await getApiDatasetRequest(collection.dataset.apiDatasetServer)).getFilePreviewUrl({
-        apiFileId: collection.apiFileId
-      });
+      return (
+        await getApiDatasetRequest(collection.dataset.apiDatasetServer, {
+          feishuSourceUrl: collection.feishuSourceUrl,
+          feishuActor: {
+            teamId: String(collection.dataset.teamId),
+            tmbId: String(collection.dataset.tmbId)
+          }
+        })
+      ).getFilePreviewUrl({ apiFileId: collection.apiFileId });
     }
     if (collection.type === DatasetCollectionTypeEnum.externalFile) {
       if (collection.externalFileId && collection.dataset.externalReadUrl) {

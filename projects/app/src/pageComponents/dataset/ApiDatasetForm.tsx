@@ -18,6 +18,8 @@ import FormLabel from '@fastgpt/web/components/common/MyBox/FormLabel';
 import MyModal from '@fastgpt/web/components/common/MyModal';
 import MyIcon from '@fastgpt/web/components/common/Icon';
 import { FolderIcon } from '@fastgpt/global/common/file/image/constants';
+import { getWebReqUrl } from '@fastgpt/web/common/system/utils';
+import { getFeishuDatasetAuthorizationPath } from '@/web/support/user/loginRedirect/url';
 
 const ApiDatasetForm = ({
   type,
@@ -32,12 +34,16 @@ const ApiDatasetForm = ({
 }) => {
   const { t } = useTranslation();
   const { register, setValue, watch, formState } = form;
-  // form 由外层以 any 传入，这里只取 baseUrl 的字段错误并声明最小结构
-  const baseUrlError = (
-    formState.errors?.apiDatasetServer as
-      | { apiServer?: { baseUrl?: { message?: string } } }
-      | undefined
-  )?.apiServer?.baseUrl;
+  const sourceErrors = formState.errors?.apiDatasetServer as
+    | {
+        apiServer?: { baseUrl?: { message?: string } };
+        feishuApp?: {
+          appId?: { message?: string };
+          appSecret?: { message?: string };
+        };
+      }
+    | undefined;
+  const baseUrlError = sourceErrors?.apiServer?.baseUrl;
   const inputLayoutProps = controlWidth
     ? {
         w: controlWidth,
@@ -52,8 +58,14 @@ const ApiDatasetForm = ({
   const rowTopMargin = controlWidth ? 4 : 6;
 
   const apiDatasetServer = watch('apiDatasetServer');
+  const savedFeishuLink = formState.defaultValues?.apiDatasetServer?.feishuLink;
+  const savedFeishuApp = formState.defaultValues?.apiDatasetServer?.feishuApp;
+  const canKeepFeishuSecret = Boolean(
+    datasetId &&
+    savedFeishuApp?.appId &&
+    apiDatasetServer?.feishuApp?.appId?.trim() === savedFeishuApp.appId
+  );
   const yuqueServer = apiDatasetServer?.yuqueServer;
-  const feishuServer = apiDatasetServer?.feishuServer;
   const apiServer = apiDatasetServer?.apiServer;
 
   const [pathNames, setPathNames] = useState(t('dataset:rootdirectory'));
@@ -68,21 +80,12 @@ const ApiDatasetForm = ({
     switch (type) {
       case DatasetTypeEnum.yuque:
         return yuqueServer?.userId && yuqueServer?.token;
-      case DatasetTypeEnum.feishu:
-        return feishuServer?.appId && feishuServer?.appSecret;
       case DatasetTypeEnum.apiDataset:
         return !!apiServer?.baseUrl;
       default:
         return false;
     }
-  }, [
-    type,
-    yuqueServer?.userId,
-    yuqueServer?.token,
-    feishuServer?.appId,
-    feishuServer?.appSecret,
-    apiServer?.baseUrl
-  ]);
+  }, [type, yuqueServer?.userId, yuqueServer?.token, apiServer?.baseUrl]);
 
   // Unified function to get the current path
   const { loading: isFetching } = useRequest(
@@ -117,9 +120,6 @@ const ApiDatasetForm = ({
     switch (type) {
       case DatasetTypeEnum.yuque:
         setValue('apiDatasetServer.yuqueServer.basePath', value);
-        break;
-      case DatasetTypeEnum.feishu:
-        setValue('apiDatasetServer.feishuServer.folderToken', value);
         break;
       case DatasetTypeEnum.apiDataset:
         setValue('apiDatasetServer.apiServer.basePath', value);
@@ -231,44 +231,76 @@ const ApiDatasetForm = ({
       )}
       {type === DatasetTypeEnum.feishu && (
         <>
-          <Flex mt={rowTopMargin} {...rowLayoutProps}>
-            <FormLabel required flex={['', '0 0 110px']} fontSize={'sm'}>
+          <Flex
+            mt={rowTopMargin}
+            alignItems={['stretch', 'center']}
+            flexDir={['column', 'row']}
+            gap={2}
+            {...rowLayoutProps}
+          >
+            <FormLabel id="feishu-app-id-label" required flex={['', '0 0 110px']} fontSize={'sm'}>
               App ID
             </FormLabel>
             <Input
+              aria-labelledby="feishu-app-id-label"
+              aria-required="true"
               {...inputLayoutProps}
               bg={'myWhite.600'}
-              placeholder={'App ID'}
+              placeholder="App ID"
               maxLength={200}
-              {...register('apiDatasetServer.feishuServer.appId', { required: true })}
+              autoComplete="off"
+              isInvalid={!!sourceErrors?.feishuApp?.appId}
+              {...register('apiDatasetServer.feishuApp.appId', {
+                validate: (value?: string) => Boolean(value?.trim()) || t('common:Required_input')
+              })}
             />
           </Flex>
-          <Flex mt={rowTopMargin} {...rowLayoutProps}>
-            <FormLabel required flex={['', '0 0 110px']} fontSize={'sm'}>
+          <Flex
+            mt={rowTopMargin}
+            alignItems={['stretch', 'center']}
+            flexDir={['column', 'row']}
+            gap={2}
+            {...rowLayoutProps}
+          >
+            <FormLabel
+              id="feishu-app-secret-label"
+              required={!canKeepFeishuSecret}
+              flex={['', '0 0 110px']}
+              fontSize={'sm'}
+            >
               App Secret
             </FormLabel>
             <Input
+              aria-labelledby="feishu-app-secret-label"
+              aria-required={!canKeepFeishuSecret}
               {...inputLayoutProps}
               bg={'myWhite.600'}
-              placeholder={'App Secret'}
-              maxLength={200}
-              {...register('apiDatasetServer.feishuServer.appSecret', { required: true })}
+              placeholder={
+                canKeepFeishuSecret ? t('dataset:feishu_app_secret_saved') : 'App Secret'
+              }
+              type="password"
+              autoComplete="new-password"
+              isInvalid={!!sourceErrors?.feishuApp?.appSecret}
+              {...register('apiDatasetServer.feishuApp.appSecret', {
+                validate: (value?: string) =>
+                  canKeepFeishuSecret || Boolean(value?.trim()) || t('common:Required_input')
+              })}
             />
           </Flex>
-          <Flex mt={rowTopMargin} {...rowLayoutProps}>
-            <FormLabel required flex={['', '0 0 110px']} fontSize={'sm'}>
-              Folder Token
-            </FormLabel>
-            <Input
-              {...inputLayoutProps}
-              bg={'myWhite.600'}
-              placeholder={'Folder Token'}
-              maxLength={200}
-              {...register('apiDatasetServer.feishuServer.folderToken', { required: true })}
-            />
-          </Flex>
-          {/* {renderBaseUrlSelector()}
-          {renderDirectoryModal()} */}
+          {datasetId && savedFeishuLink?.url && !savedFeishuApp?.appId && (
+            <Flex mt={2} justifyContent="flex-end">
+              <Button
+                as="a"
+                variant="link"
+                size="sm"
+                target="_blank"
+                rel="noopener noreferrer"
+                href={getWebReqUrl(getFeishuDatasetAuthorizationPath())}
+              >
+                {t('dataset:feishu_link_authorize')}
+              </Button>
+            </Flex>
+          )}
         </>
       )}
       {type === DatasetTypeEnum.yuque && (

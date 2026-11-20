@@ -1,7 +1,6 @@
 import { S3Sources } from '../../contracts/type';
 import { encodeS3ObjectKey } from '../../keySanitizer';
 import { S3PrivateBucket } from '../../buckets/private';
-import streamConsumer from 'node:stream/consumers';
 import {
   type CreateGetDatasetFileURLParams,
   CreateGetDatasetFileURLParamsSchema,
@@ -20,7 +19,7 @@ import { getLogger, LogCategories } from '../../../logger';
 import { readFileContentBySource } from '../../../file/read/utils';
 import { ensureTextContentTypeCharset, isTextLikeFile, resolveMimeType } from '../../utils/mime';
 import { createUploadConstraints, datasetAllowedExtensions } from '../../utils/uploadConstraints';
-import { getFileS3Key } from '../../utils';
+import { getFileS3Key, readStreamToBuffer } from '../../utils';
 import { isAuthorizedDatasetFileS3Key } from './key';
 import type { S3RawTextSource } from '../rawText';
 import { getS3RawTextSource } from '../rawText';
@@ -134,13 +133,13 @@ export class S3DatasetSource extends S3PrivateBucket {
     return this.addDeleteJob({ prefix });
   }
 
-  async getDatasetBase64Image(key: string): Promise<string> {
+  async getDatasetBase64Image(key: string, maxBytes?: number): Promise<string> {
     const [downloadResponse, fileMetadata] = await Promise.all([
       this.client.downloadObject({ key }),
       this.getFileMetadata(key)
     ]);
 
-    const buffer = await streamConsumer.buffer(downloadResponse.body);
+    const buffer = await readStreamToBuffer({ stream: downloadResponse.body, maxBytes });
     const base64 = buffer.toString('base64');
     return `data:${fileMetadata?.contentType || 'image/jpeg'};base64,${base64}`;
   }
