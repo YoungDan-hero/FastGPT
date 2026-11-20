@@ -24,6 +24,8 @@ import { getSourceNameIcon } from '@fastgpt/global/core/dataset/utils';
 import { isObjectId } from '@fastgpt/global/common/string/utils';
 import { isSafeHref } from '@fastgpt/global/common/string/url';
 import type { ResolvedChatAuthTargetInput } from '@/web/core/chat/type';
+import { feishuHandoffLink } from '@fastgpt/global/core/app/feishuHandoff';
+import { FeishuHandoffCard } from '@/components/core/chat/ChatContainer/ChatBox/components/FeishuHandoff';
 
 type MarkdownChatAuthData = ResolvedChatAuthTargetInput & {
   chatId: string;
@@ -239,6 +241,14 @@ const A = ({
   [key: string]: any;
 }) => {
   const content = useMemo(() => getLinkTextContent(children), [children]);
+
+  if (props.href === feishuHandoffLink) {
+    return (
+      <FeishuHandoffCard answerId={chatAuthData?.chatItemDataId}>
+        {content || '转人工'}
+      </FeishuHandoffCard>
+    );
+  }
 
   // empty href link
   if (!props.href && typeof children?.[0] === 'string') {

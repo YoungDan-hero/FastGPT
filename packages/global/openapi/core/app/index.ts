@@ -12,6 +12,7 @@ import { ToolPath } from './tool';
 import { AppEvaluationPath } from './evaluation';
 import { ToolSetPath } from './toolSet';
 import { AppBatchPath } from './batch';
+import { FeishuHandoffPath } from './feishuHandoff';
 
 export const AppPath: OpenAPIPath = {
   ...AppCommonPath,
@@ -26,5 +27,6 @@ export const AppPath: OpenAPIPath = {
   ...McpToolsPath,
   ...HttpToolsPath,
   ...ToolPath,
-  ...AppBatchPath
+  ...AppBatchPath,
+  ...FeishuHandoffPath
 };

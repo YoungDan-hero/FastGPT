@@ -22,6 +22,7 @@ import { ChatGenerateStatusEnum, ChatSourceTypeEnum } from '@fastgpt/global/core
 import { parseApiInput } from '@fastgpt/service/common/zod/requestParseError';
 import { buildChatSourceQuery } from '@fastgpt/service/core/chat/source';
 import { buildChatTargetResponse } from '@fastgpt/global/openapi/core/chat/api';
+import { getFeishuHandoffChatOptions } from '@fastgpt/service/core/app/feishuHandoff/service';
 
 export async function handler(req: NextApiRequest): Promise<InitOutLinkChatResponseType> {
   const { chatId, outLinkAuthData } = parseApiInput({
@@ -31,7 +32,7 @@ export async function handler(req: NextApiRequest): Promise<InitOutLinkChatRespo
   const { shareId, outLinkUid } = outLinkAuthData;
 
   // auth link permission
-  const { uid, appId, outLinkConfig } = await authOutLink({ shareId, outLinkUid, req });
+  const { uid, appId, outLinkConfig, appAccess } = await authOutLink({ shareId, outLinkUid, req });
 
   // auth app permission
   const [chat, app] = await Promise.all([
@@ -103,6 +104,9 @@ export async function handler(req: NextApiRequest): Promise<InitOutLinkChatRespo
     hasBeenRead: chat?.hasBeenRead,
     app: {
       chatConfig: appChatConfig,
+      feishuHandoff: appAccess
+        ? await getFeishuHandoffChatOptions(String(appId), String(outLinkConfig.teamId))
+        : undefined,
       name: app.name,
       avatar: app.avatar ?? '',
       intro: app.intro ?? '',

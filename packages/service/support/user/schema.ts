@@ -72,6 +72,7 @@ const UserSchema = new Schema({
         appId: { type: String, required: true },
         teamId: { type: Schema.Types.ObjectId, required: true },
         nickname: String,
+        unionId: String,
         checkedAt: { type: Date, default: null },
         revokedAt: Date
       },

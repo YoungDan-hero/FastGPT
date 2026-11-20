@@ -28,6 +28,7 @@ const ChatWindowHeader = ({
   return (
     <Flex
       as="header"
+      data-chat-ui="header"
       position="relative"
       minH="56px"
       px={5}

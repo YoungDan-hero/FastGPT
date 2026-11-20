@@ -74,6 +74,7 @@ import { getLastAiDataId } from './utils/resume';
 import ComplianceTip from '@/components/common/ComplianceTip/index';
 import { ChatInstanceActionsContext } from '../context/chatInstanceActionsContext';
 import { ChatFeedbackProvider } from '../context/chatFeedbackContext';
+import { FeishuHandoffChat } from './components/FeishuHandoff';
 import type { FeedbackTypeEnum } from './constants';
 import {
   registerChatInstanceActions,
@@ -718,7 +719,18 @@ const ChatBox = ({
     </>
   );
 
-  return (
+  const handoffTarget =
+    active &&
+    isReady &&
+    (chatType === ChatTypeEnum.chat || chatType === ChatTypeEnum.share) &&
+    chatId &&
+    chatBoxData.appId === sourceTarget.sourceId &&
+    !isInitialLoadingRecords &&
+    chatRecords.length > 0
+      ? { appId: sourceTarget.sourceId, chatId, outLinkAuthData }
+      : undefined;
+
+  const content = (
     <ChatFeedbackProvider
       fbTypes={resolvedFeatures.fbTypes}
       feedbackUserName={feedbackUserName}
@@ -856,6 +868,15 @@ const ChatBox = ({
         </MyBox>
       </ChatInstanceActionsContext.Provider>
     </ChatFeedbackProvider>
+  );
+  return (
+    <FeishuHandoffChat
+      target={handoffTarget}
+      enabled={Boolean(chatBoxData.app.feishuHandoff)}
+      records={chatRecords}
+    >
+      {content}
+    </FeishuHandoffChat>
   );
 };
 const ChatBoxContainer = (props: Props) => {

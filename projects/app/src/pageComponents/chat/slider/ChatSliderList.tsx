@@ -143,6 +143,7 @@ const ChatSliderList = () => {
             <Flex
               position={'relative'}
               className="chatHistoryItem"
+              data-active-chat={item.id === activeChatId ? '' : undefined}
               key={item.id}
               alignItems={'center'}
               p="8px"
@@ -167,7 +168,8 @@ const ChatSliderList = () => {
               bg={item.top ? '#E6F6F6 !important' : ''}
               {...(item.id === activeChatId
                 ? {
-                    backgroundColor: 'primary.100 !important',
+                    backgroundColor:
+                      'var(--chat-history-selected, var(--chakra-colors-primary-100)) !important',
                     color: 'primary.600'
                   }
                 : {

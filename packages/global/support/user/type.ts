@@ -37,6 +37,7 @@ export type UserModelSchema = {
     checkedAt: Date | null;
     revokedAt?: Date;
     nickname?: string | null;
+    unionId?: string | null;
   };
 };
 

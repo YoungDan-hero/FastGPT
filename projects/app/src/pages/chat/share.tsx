@@ -57,6 +57,7 @@ import { useSandboxEditor, useSandboxStatus } from '@/pageComponents/chat/Sandbo
 import type { GetHistoriesBodyType } from '@fastgpt/global/openapi/core/chat/history/api';
 import type { OutLinkBrandingType } from '@fastgpt/global/support/outLink/branding';
 import MyTooltip from '@fastgpt/web/components/common/MyTooltip';
+import chatStyles from '@/pageComponents/chat/conversation.module.scss';
 
 const logger = getLogger(LogCategories.MODULE.CHAT.ITEM);
 
@@ -334,6 +335,7 @@ const OutLink = (props: Props & BrandingPageProps) => {
         icon={props.appAvatar || data?.app?.avatar}
       />
       <Flex
+        className={isEmbed || isPlugin ? undefined : chatStyles.frame}
         h={'full'}
         minH={0}
         minW={0}
@@ -355,11 +357,18 @@ const OutLink = (props: Props & BrandingPageProps) => {
                 : undefined
             }
           >
-            <Flex h={'100%'} minH={0} minW={0} flexDirection={['column', 'row']}>
+            <Flex
+              className={isPlugin ? undefined : chatStyles.conversation}
+              h={'100%'}
+              minH={0}
+              minW={0}
+              flexDirection={['column', 'row']}
+            >
               {RenderHistoryList}
 
               {/* chat container */}
               <Flex
+                data-chat-ui="pane"
                 bg="white"
                 position={'relative'}
                 h={[0, '100%']}
@@ -379,11 +388,12 @@ const OutLink = (props: Props & BrandingPageProps) => {
                         history={chatRecords}
                         chatType={ChatTypeEnum.share}
                         rightActions={<SandboxEntryIcon onOpen={onOpenSandboxModal} />}
-                        endActions={headerBrand}
+                        endActions={isEmbed ? headerBrand : undefined}
                       />
                     ) : (
                       <Flex
                         as="header"
+                        data-chat-ui="header"
                         minH="48px"
                         py={narrowBrand ? 2 : 0}
                         px={4}
@@ -465,15 +475,23 @@ const OutLink = (props: Props & BrandingPageProps) => {
                         )}
                       </Flex>
                     ))}
-                  {/* 无常规页头时仍保留品牌所在的 header 行，避免覆盖聊天内容。 */}
-                  {headerBrand && (isPlugin || showHead !== '1') && (
-                    <Flex as="header" h="56px" px={5} alignItems="center" justifyContent="flex-end">
+                  {/* 嵌入页或插件保留独立的品牌行，避免覆盖内容。 */}
+                  {headerBrand && (isPlugin || (isEmbed && showHead !== '1')) && (
+                    <Flex
+                      as="header"
+                      data-chat-ui="header"
+                      h="56px"
+                      px={5}
+                      alignItems="center"
+                      justifyContent="flex-end"
+                    >
                       {headerBrand}
                     </Flex>
                   )}
                   {narrowBrand && (showHead !== '1' || isPlugin) && (
                     <Flex
                       as="header"
+                      data-chat-ui="header"
                       minH="48px"
                       px={4}
                       py={2}
@@ -489,7 +507,14 @@ const OutLink = (props: Props & BrandingPageProps) => {
                   )}
                 </Box>
                 {/* chat box */}
-                <Box flex={1} minH={0} minW={0} overflow={'hidden'} bg={'white'}>
+                <Box
+                  data-chat-ui="body"
+                  flex={1}
+                  minH={0}
+                  minW={0}
+                  overflow={'hidden'}
+                  bg={'white'}
+                >
                   {isPlugin ? (
                     <CustomPluginRunBox
                       complianceTipPlacement={complianceTipPlacement}

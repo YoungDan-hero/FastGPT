@@ -72,6 +72,7 @@ const HumanChatBubble = ({
       <Box position={'relative'} w={'fit-content'} maxW={'100%'}>
         <Card
           {...MessageCardStyle}
+          data-chat-ui="user-message"
           bg={'primary.50'}
           color={'myGray.900'}
           px={4}

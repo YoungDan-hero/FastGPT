@@ -92,6 +92,7 @@ const AppChatMain = ({
         maxW={'100%'}
       >
         <Box
+          data-chat-empty={recordsListProps.records.length === 0 ? '' : undefined}
           maxW={boxBodyProps?.maxW ?? maxW}
           w={'100%'}
           minW={0}
@@ -104,6 +105,7 @@ const AppChatMain = ({
             普通 ChatBox 继续沿用移动端额外收窄，避免改变既有聊天场景。 */}
           <Box
             className="chat-box-card"
+            data-chat-ui="welcome-slot"
             w={'100%'}
             maxW={workflowBuilderStyle ? '100%' : ['calc(100% - 25px)', ChatBoxContentMaxWidth]}
             mx={workflowBuilderStyle ? 0 : 'auto'}
@@ -116,7 +118,13 @@ const AppChatMain = ({
               />
             )}
             {visibleWelcomeQuestions.length > 0 && (
-              <Flex w={'100%'} flexDirection={'column'} alignItems={'flex-start'} gap={2}>
+              <Flex
+                data-chat-ui="welcome-questions"
+                w={'100%'}
+                flexDirection={'column'}
+                alignItems={'flex-start'}
+                gap={2}
+              >
                 {visibleWelcomeQuestions.map((text, index) => (
                   <QuickQuestionButton
                     key={`${index}-${text}`}

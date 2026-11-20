@@ -1,4 +1,5 @@
 import { AppTypeEnum } from './constants';
+import type { FeishuHandoffConfig } from './feishuHandoff';
 import { NodeInputKeyEnum } from '../workflow/constants';
 import { DatasetSearchModeEnum } from '../dataset/constants';
 import { DatasetTagFilterValueSchema } from '../dataset/search/tagFilter';
@@ -292,7 +293,10 @@ export const AppSchemaTypeSchema = AppStorageSchemaTypeSchema.omit({ ancestorIds
 });
 export type AppSchemaType = z.infer<typeof AppSchemaTypeSchema>;
 /** Mongo storage also carries the folder-only path omitted from client-facing App schemas. */
-export type AppMongoSchemaType = AppSchemaType & Pick<AppStorageSchemaType, 'ancestorIds'>;
+export type AppMongoSchemaType = AppSchemaType &
+  Pick<AppStorageSchemaType, 'ancestorIds'> & {
+    feishuHandoff?: FeishuHandoffConfig;
+  };
 
 export type AppListItemType = {
   _id: string;

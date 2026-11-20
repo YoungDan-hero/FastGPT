@@ -38,6 +38,7 @@ import { pushResult2Remote, addOutLinkUsage } from '@fastgpt/service/support/out
 import { getUsageSourceByAuthType } from '@fastgpt/global/support/wallet/usage/tools';
 import {
   concatHistories,
+  getChatItemTextContent,
   removeAIResponseCite,
   removeEmptyUserInput,
   stripModerationRecordsFromNodeResponses
@@ -54,6 +55,18 @@ import { markProfileError } from '@fastgpt/service/common/profiling';
 import { getAppLatestVersion } from '@fastgpt/service/core/app/version/controller';
 import { createWorkflowResourceContext } from '@fastgpt/service/core/workflow/resource/context';
 import { AppTypeEnum } from '@fastgpt/global/core/app/constants';
+import {
+  feishuHandoffAppTypes,
+  feishuHandoffLink,
+  feishuHandoffReply,
+  getFeishuHandoffMessageText,
+  getFeishuHandoffRequest,
+  isFeishuHandoffNoAnswer
+} from '@fastgpt/global/core/app/feishuHandoff';
+import { getFeishuHandoffChatOptions } from '@fastgpt/service/core/app/feishuHandoff/service';
+import { AuthUserTypeEnum } from '@fastgpt/global/support/permission/constant';
+import { consumeEntryModerationChecked } from '@fastgpt/service/core/plugin/moderation/entry';
+import { isModerationBlockErrorMessage } from '@fastgpt/global/core/plugin/moderation/constants';
 import {
   serverGetWorkflowToolRunUserQuery,
   updateWorkflowToolInputByVariables
@@ -376,7 +389,27 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       void titleSender.start();
     }
 
-    /* start flow controller */
+    const canOfferHandoff =
+      stream &&
+      authType === AuthUserTypeEnum.token &&
+      !authProxy &&
+      preparedRound.shouldFinalizePreparedRound &&
+      workflowUserQuestion.obj === ChatRoleEnum.Human &&
+      !workflowUserQuestion.hideInUI &&
+      feishuHandoffAppTypes.some((type) => type === app.type);
+    const handoffRequested =
+      canOfferHandoff &&
+      !interactive &&
+      !!getFeishuHandoffRequest(getChatItemTextContent(workflowQuery)) &&
+      !!(await getFeishuHandoffChatOptions(runningAppId, String(teamId)));
+
+    if (handoffRequested) {
+      // preChatRound 已审核输入。消费标记后直接保存本轮，跳过业务工作流。
+      consumeEntryModerationChecked({
+        chatId: saveChatId,
+        responseChatItemId: finalResponseChatItemId
+      });
+    }
     const {
       flowUsages,
       assistantResponses,
@@ -385,56 +418,87 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       system_memories,
       customFeedbacks,
       workflowRuntimeSummary,
+      workflowInteractiveResponse,
       flatNodeResponses
-    } = await dispatchWorkFlow({
-      apiVersion: 'v2',
-      res,
-      lang: getLocale(req),
-      requestOrigin: req.headers.origin,
-      mode: 'chat',
+    } = handoffRequested
+      ? {
+          flowUsages: [],
+          assistantResponses: [{ text: { content: feishuHandoffReply }, displayOnly: true }],
+          newVariables: variables,
+          durationSeconds: 0,
+          system_memories: undefined,
+          customFeedbacks: undefined,
+          workflowRuntimeSummary: undefined,
+          workflowInteractiveResponse: undefined,
+          flatNodeResponses: undefined
+        }
+      : await dispatchWorkFlow({
+          apiVersion: 'v2',
+          res,
+          lang: getLocale(req),
+          requestOrigin: req.headers.origin,
+          mode: 'chat',
 
-      usageSource: getUsageSourceByAuthType({ shareId, authType }),
-      runningAppInfo: {
-        sourceType: ChatSourceTypeEnum.app,
-        sourceId: String(app._id),
-        name: app.name,
-        teamId: String(app.teamId),
-        tmbId: String(app.tmbId)
-      },
-      runningUserInfo: await getRunningUserInfoByTmbId(tmbId),
-      uid: String(outLinkUserId || tmbId),
+          usageSource: getUsageSourceByAuthType({ shareId, authType }),
+          runningAppInfo: {
+            sourceType: ChatSourceTypeEnum.app,
+            sourceId: String(app._id),
+            name: app.name,
+            teamId: String(app.teamId),
+            tmbId: String(app.tmbId)
+          },
+          runningUserInfo: await getRunningUserInfoByTmbId(tmbId),
+          uid: String(outLinkUserId || tmbId),
 
-      chatId: saveChatId,
-      responseChatItemId: finalResponseChatItemId,
-      runtimeNodes,
-      runtimeEdges: storeEdges2RuntimeEdges(edges, interactive),
-      variables,
-      query: removeEmptyUserInput(workflowQuery),
-      maxFileAmount,
-      maxBytesPerFile,
-      lastInteractive: interactive,
-      chatConfig,
-      resourceContext: createWorkflowResourceContext({
-        resources,
-        teamId,
-        allowFeishuKnowledgeWrite: authType === 'token'
-      }),
-      histories: newHistories,
-      stream,
-      retainDatasetCite: workflowRetainDatasetCite,
-      showSkillReferences: finalShowSkillReferences,
-      maxRunTimes: getWorkflowMaxRunTimes(),
-      workflowStreamResponse: createModerationFilteredWorkflowResponse({
-        responseWrite: streamResponseContext.responseWrite,
-        canReadModerationRecords
-      }),
-      responseAllData,
-      responseDetail: showCite,
-      nodeResponseWriteConfig: {
-        persistToDb: preparedRound.shouldPersistChatRound,
-        retainInMemory: shouldCollectFinalResponseData
+          chatId: saveChatId,
+          responseChatItemId: finalResponseChatItemId,
+          runtimeNodes,
+          runtimeEdges: storeEdges2RuntimeEdges(edges, interactive),
+          variables,
+          query: removeEmptyUserInput(workflowQuery),
+          maxFileAmount,
+          maxBytesPerFile,
+          lastInteractive: interactive,
+          chatConfig,
+          resourceContext: createWorkflowResourceContext({
+            resources,
+            teamId,
+            allowFeishuKnowledgeWrite: authType === 'token'
+          }),
+          histories: newHistories,
+          stream,
+          retainDatasetCite: workflowRetainDatasetCite,
+          showSkillReferences: finalShowSkillReferences,
+          maxRunTimes: getWorkflowMaxRunTimes(),
+          workflowStreamResponse: createModerationFilteredWorkflowResponse({
+            responseWrite: streamResponseContext.responseWrite,
+            canReadModerationRecords
+          }),
+          responseAllData,
+          responseDetail: showCite,
+          nodeResponseWriteConfig: {
+            persistToDb: preparedRound.shouldPersistChatRound,
+            retainInMemory: shouldCollectFinalResponseData
+          }
+        });
+
+    let handoffDelta = handoffRequested ? feishuHandoffReply : '';
+    if (canOfferHandoff && !handoffRequested && !workflowInteractiveResponse) {
+      const answer = getFeishuHandoffMessageText(assistantResponses);
+      const error = workflowRuntimeSummary?.errorText;
+      const alreadyOffersHandoff = assistantResponses.some(({ text }) =>
+        text?.content.includes(`](${feishuHandoffLink})`)
+      );
+      if (
+        !alreadyOffersHandoff &&
+        !isModerationBlockErrorMessage(error) &&
+        (isFeishuHandoffNoAnswer(answer) || (!answer && error)) &&
+        (await getFeishuHandoffChatOptions(runningAppId, String(teamId)))
+      ) {
+        handoffDelta = `\n\n${feishuHandoffReply}`;
+        assistantResponses.push({ text: { content: handoffDelta }, displayOnly: true });
       }
-    });
+    }
 
     const aiResponse: AIChatItemType & { dataId?: string } = {
       dataId: finalResponseChatItemId,
@@ -506,6 +570,9 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       await titleSender.send();
       titleSender.close();
 
+      if (handoffDelta) {
+        streamResponseContext.responseWrite(workflowSseEvent.fastAnswerDelta(handoffDelta));
+      }
       streamResponseContext.responseWrite(workflowSseEvent.answerStop());
 
       streamResponseContext.responseWrite(

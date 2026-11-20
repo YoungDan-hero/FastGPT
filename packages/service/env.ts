@@ -62,6 +62,8 @@ export const serviceEnv = createEnv({
     FEISHU_ORG_ENABLED: BoolSchema.default(false),
     FEISHU_ORG_APP_ID: z.string().min(1).optional(),
     FEISHU_ORG_APP_SECRET: z.string().min(1).optional(),
+    FEISHU_BOT_APP_ID: z.string().min(1).optional(),
+    FEISHU_BOT_APP_SECRET: z.string().min(1).optional(),
     FEISHU_ORG_DEV_LAN_ORIGIN: UrlSchema.optional().meta({
       description: '开发模式下飞书登录可使用的单个内网 HTTP 来源地址'
     }),

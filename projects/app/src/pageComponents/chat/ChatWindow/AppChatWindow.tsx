@@ -37,6 +37,7 @@ import { getAppChatSourceKey } from '@/web/core/chat/utils';
 import { useAppChatGenerateStatusSync } from './useAppChatGenerateStatusSync';
 import { postMarkChatRead } from '@/web/core/chat/history/api';
 import { UserError } from '@fastgpt/global/common/error/utils';
+import chatStyles from '../conversation.module.scss';
 
 const CustomPluginRunBox = dynamic(() => import('@/pageComponents/chat/CustomPluginRunBox'));
 
@@ -157,7 +158,13 @@ const AppChatWindow = () => {
   );
 
   return (
-    <Flex h={'100%'} minH={0} minW={0} flexDirection={['column', 'row']}>
+    <Flex
+      className={isPlugin ? undefined : chatStyles.conversation}
+      h={'100%'}
+      minH={0}
+      minW={0}
+      flexDirection={['column', 'row']}
+    >
       {/* set window title and icon */}
       <NextHead
         title={isCurrentChatReady ? chatBoxData.app.name : undefined}
@@ -183,6 +190,7 @@ const AppChatWindow = () => {
 
       {/* chat container */}
       <Flex
+        data-chat-ui="pane"
         position={'relative'}
         h={[0, '100%']}
         minH={0}
@@ -201,6 +209,7 @@ const AppChatWindow = () => {
             />
           ) : (
             <Flex
+              data-chat-ui="header"
               h="48px"
               px={4}
               bg="white"
@@ -247,7 +256,7 @@ const AppChatWindow = () => {
             </Flex>
           ))}
 
-        <Box flex={'1 0 0'} minH={0} minW={0} overflow={'hidden'} bg={'white'}>
+        <Box data-chat-ui="body" flex={'1 0 0'} minH={0} minW={0} overflow={'hidden'} bg={'white'}>
           {isPlugin ? (
             <CustomPluginRunBox
               appId={appId}

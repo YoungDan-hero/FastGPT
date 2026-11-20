@@ -89,6 +89,17 @@ const AppSchema = new Schema(
       type: chatConfigType,
       default: undefined
     },
+    feishuHandoff: {
+      type: new Schema(
+        {
+          enabled: Boolean,
+          defaultGroupId: Schema.Types.ObjectId
+        },
+        { _id: false }
+      ),
+      default: undefined,
+      select: false
+    },
     /** @deprecated 仅供旧版本兼容、回滚和资源迁移核对 */
     resourceRefs: {
       type: Object,

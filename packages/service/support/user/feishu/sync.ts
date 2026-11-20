@@ -103,7 +103,8 @@ export async function syncFeishuOrganization() {
             {
               $set: {
                 'feishuOrg.checkedAt': checkedAt,
-                'feishuOrg.nickname': employee.nickname || null
+                'feishuOrg.nickname': employee.nickname || null,
+                'feishuOrg.unionId': employee.union_id ?? null
               },
               $setOnInsert: { status: UserStatusEnum.active }
             },

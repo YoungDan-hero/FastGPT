@@ -19,6 +19,7 @@ const ChatHistorySidebar = ({ title, banner, menuConfirmButtonText, footerSlot }
 
   return (
     <MyBox
+      data-chat-ui="history"
       display={'flex'}
       flexDirection={'column'}
       w={'100%'}

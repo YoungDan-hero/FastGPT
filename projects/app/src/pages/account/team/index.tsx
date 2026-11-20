@@ -24,11 +24,15 @@ const AuditLog = dynamic(() => import('@/pageComponents/account/team/Audit/index
 const GroupManage = dynamic(() => import('@/pageComponents/account/team/GroupManage/index'));
 const OrgManage = dynamic(() => import('@/pageComponents/account/team/OrgManage/index'));
 const FeishuAccess = dynamic(() => import('@/pageComponents/account/team/FeishuAccess'));
+const FeishuHandoffGroups = dynamic(
+  () => import('@/pageComponents/account/team/FeishuHandoffGroups')
+);
 
 export enum TeamTabEnum {
   member = 'member',
   org = 'org',
   group = 'group',
+  handoff = 'handoff',
   permission = 'permission',
   audit = 'audit'
 }
@@ -106,7 +110,22 @@ const Team = () => {
           overflowY={['visible', 'auto']}
         >
           {isSystemAdminUser(userInfo) ? (
-            <FeishuAccess />
+            <>
+              <Box maxW="1100px" mx="auto">
+                <FillRowTabs
+                  size="sm"
+                  list={[
+                    { label: '飞书组织授权', value: TeamTabEnum.member },
+                    { label: '客服组', value: TeamTabEnum.handoff }
+                  ]}
+                  value={teamTab === TeamTabEnum.handoff ? TeamTabEnum.handoff : TeamTabEnum.member}
+                  onChange={(teamTab) => {
+                    void router.replace({ query: { ...router.query, teamTab } });
+                  }}
+                />
+              </Box>
+              {teamTab === TeamTabEnum.handoff ? <FeishuHandoffGroups /> : <FeishuAccess />}
+            </>
           ) : (
             <Text color="myGray.600">部门由飞书通讯录同步。请联系系统管理员配置资源权限。</Text>
           )}

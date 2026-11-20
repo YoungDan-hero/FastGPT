@@ -7,6 +7,7 @@ import { useForm, type UseFormReturn } from 'react-hook-form';
 import { defaultChatData } from '@/global/core/chat/constants';
 import { AppTypeEnum } from '@fastgpt/global/core/app/constants';
 import type { AppChatConfigType } from '@fastgpt/global/core/app/type';
+import type { FeishuHandoffChatOptions } from '@fastgpt/global/core/app/feishuHandoff';
 import type { VariableItemType } from '@fastgpt/global/core/app/variable/type';
 import { type FlowNodeInputItemType } from '@fastgpt/global/core/workflow/type/io';
 import { type SearchDataResponseQuoteListItemType } from '@fastgpt/global/core/dataset/type';
@@ -65,6 +66,7 @@ type ChatBoxDataType = {
     pluginInputs: FlowNodeInputItemType[];
     chatModels?: string[];
     useAgentSandbox?: boolean;
+    feishuHandoff?: FeishuHandoffChatOptions;
   };
 };
 

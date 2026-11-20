@@ -1,9 +1,12 @@
 import { AppTypeEnum } from '@fastgpt/global/core/app/constants';
+import { feishuHandoffReply } from '@fastgpt/global/core/app/feishuHandoff';
+import { workflowSseEvent } from '@fastgpt/global/core/workflow/runtime/sse';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   authChatCompletionHeaderRequest: vi.fn(),
+  getFeishuHandoffChatOptions: vi.fn(),
   preChatRound: vi.fn(),
   dispatchWorkFlow: vi.fn(),
   finalizeChatRound: vi.fn(),
@@ -18,6 +21,10 @@ vi.mock('@/service/middleware/entry', () => ({ NextAPI: (handler: unknown) => ha
 vi.mock('@/service/support/permission/auth/chatCompletion', () => ({
   authChatCompletionHeaderRequest: mocks.authChatCompletionHeaderRequest
 }));
+vi.mock('@fastgpt/service/core/app/feishuHandoff/service', () => ({
+  getFeishuHandoffChatOptions: mocks.getFeishuHandoffChatOptions
+}));
+vi.mock('@fastgpt/service/core/app/record/utils', () => ({ recordAppUsage: vi.fn() }));
 vi.mock('@fastgpt/service/support/permission/app/auth', () => ({
   authApp: mocks.authChatCompletionHeaderRequest
 }));
@@ -82,6 +89,12 @@ describe.each([
   { name: 'workflow chatTest', handler: chatTestHandler, supportsNonStream: false }
 ])('$name stream cleanup', ({ handler, supportsNonStream }) => {
   const appId = '67f4c91c79a4d61b1f116b2a';
+  const auth = {
+    teamId: '67f4c91c79a4d61b1f116b2b',
+    tmbId: '67f4c91c79a4d61b1f116b2c',
+    authType: 'apikey',
+    app: { _id: appId, name: 'Chat', type: AppTypeEnum.workflow }
+  };
   const preparedRound = {
     chatId: 'chat-1',
     responseChatItemId: 'response-1',
@@ -89,7 +102,7 @@ describe.each([
     shouldFinalizePreparedRound: true
   };
 
-  const runRequest = (stream = true) => {
+  const runRequest = (stream = true, question = 'Hello') => {
     const response = { end: vi.fn(), json: vi.fn(), status: vi.fn().mockReturnThis() };
     const request = {
       headers: {},
@@ -97,7 +110,7 @@ describe.each([
         appId,
         chatId: preparedRound.chatId,
         responseChatItemId: preparedRound.responseChatItemId,
-        messages: [{ role: 'user', content: 'Hello' }],
+        messages: [{ role: 'user', content: question }],
         nodes: [],
         edges: [],
         chatConfig: {},
@@ -114,12 +127,7 @@ describe.each([
 
   beforeEach(() => {
     Object.values(mocks).forEach((mock) => mock.mockReset());
-    mocks.authChatCompletionHeaderRequest.mockResolvedValue({
-      teamId: '67f4c91c79a4d61b1f116b2b',
-      tmbId: '67f4c91c79a4d61b1f116b2c',
-      authType: 'apikey',
-      app: { _id: appId, name: 'Chat', type: AppTypeEnum.workflow }
-    });
+    mocks.authChatCompletionHeaderRequest.mockResolvedValue(auth);
     mocks.preChatRound.mockResolvedValue({ ...preparedRound });
     mocks.dispatchWorkFlow.mockResolvedValue({
       flowUsages: [],
@@ -190,6 +198,61 @@ describe.each([
   });
 
   if (supportsNonStream) {
+    it('员工明确要求转人工时保存卡片并跳过工作流', async () => {
+      mocks.authChatCompletionHeaderRequest.mockResolvedValueOnce({ ...auth, authType: 'token' });
+      mocks.getFeishuHandoffChatOptions.mockResolvedValueOnce({ categories: [] });
+      await runRequest(true, '麻烦帮我转一下人工客服').result;
+
+      expect(mocks.dispatchWorkFlow).not.toHaveBeenCalled();
+      expect(mocks.finalizeChatRound).toHaveBeenCalledWith(
+        expect.objectContaining({
+          aiContent: expect.objectContaining({
+            value: [{ text: { content: feishuHandoffReply }, displayOnly: true }]
+          })
+        })
+      );
+      expect(mocks.responseWrite).toHaveBeenCalledWith(
+        workflowSseEvent.fastAnswerDelta(feishuHandoffReply)
+      );
+      expect(mocks.finalizeChatRound.mock.invocationCallOrder[0]).toBeLessThan(
+        mocks.responseWrite.mock.invocationCallOrder[0]
+      );
+    });
+
+    it.each([
+      { answer: '知识库里暂未找到足以回答这个问题的资料。', enabled: true, offer: true },
+      { answer: '退款可在签收后 7 天内申请。', enabled: true, offer: false },
+      { answer: '知识库里暂未找到足以回答这个问题的资料。', enabled: false, offer: false }
+    ])('按回答和应用配置决定是否在本轮追加卡片 $offer', async ({ answer, enabled, offer }) => {
+      mocks.authChatCompletionHeaderRequest.mockResolvedValueOnce({ ...auth, authType: 'token' });
+      mocks.getFeishuHandoffChatOptions.mockResolvedValueOnce(
+        enabled ? { categories: [] } : undefined
+      );
+      mocks.dispatchWorkFlow.mockResolvedValueOnce({
+        flowUsages: [],
+        assistantResponses: [{ text: { content: answer } }],
+        newVariables: {},
+        durationSeconds: 1
+      });
+      await runRequest(true, '告诉我退款规则').result;
+
+      expect(mocks.dispatchWorkFlow).toHaveBeenCalledOnce();
+      const card = `\n\n${feishuHandoffReply}`;
+      const expectedValues = [
+        { text: { content: answer } },
+        ...(offer ? [{ text: { content: card }, displayOnly: true }] : [])
+      ];
+      expect(mocks.finalizeChatRound).toHaveBeenCalledWith(
+        expect.objectContaining({
+          aiContent: expect.objectContaining({ value: expectedValues })
+        })
+      );
+      const emittedCard = mocks.responseWrite.mock.calls.some(([event]) =>
+        JSON.stringify(event).includes(feishuHandoffReply)
+      );
+      expect(emittedCard).toBe(offer);
+    });
+
     it('keeps non-streaming responses outside stream cleanup', async () => {
       const { response, result } = runRequest(false);
       await result;

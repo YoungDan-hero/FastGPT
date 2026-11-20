@@ -2,6 +2,7 @@ import { ChatIdSchema } from '../../../../core/chat/schema';
 import { OutLinkChatAuthSchema } from '../../../../support/permission/chat';
 import z from 'zod';
 import { AppTypeEnum } from '../../../../core/app/constants';
+import { FeishuHandoffChatOptionsSchema } from '../../../../core/app/feishuHandoff';
 import { ChatGenerateStatusEnum } from '../../../../core/chat/constants';
 import { OpenAPIFlowNodeInputItemTypeSchema } from '../../workflow/node';
 import { OpenAPIAppChatConfigSchema } from '../../app/common/api';
@@ -50,7 +51,8 @@ export const InitChatResponseSchema = createChatTargetResponseSchema({
       canUse: z.boolean().optional().describe('是否可用'),
       type: z.enum(AppTypeEnum).describe('应用类型'),
       pluginInputs: z.array(OpenAPIFlowNodeInputItemTypeSchema).describe('插件输入'),
-      useAgentSandbox: z.boolean().optional().describe('是否使用虚拟机')
+      useAgentSandbox: z.boolean().optional().describe('是否使用虚拟机'),
+      feishuHandoff: FeishuHandoffChatOptionsSchema.optional().describe('人工客服是否启用')
     })
     .describe('应用配置')
 });

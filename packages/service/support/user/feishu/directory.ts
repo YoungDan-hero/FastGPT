@@ -9,6 +9,7 @@ const Department = z.object({
 });
 const Employee = z.object({
   open_id: Id,
+  union_id: Id.nullish(),
   name: z.string().min(1),
   nickname: z.string().trim().nullish(),
   avatar: z.object({ avatar_72: z.string().nullish(), avatar_240: z.string().nullish() }).nullish(),
@@ -138,6 +139,7 @@ export async function readFeishuDirectory(assertValid: () => void) {
         const previous = employees.get(employee.open_id);
         employees.set(employee.open_id, {
           ...employee,
+          union_id: employee.union_id ?? previous?.union_id,
           department_ids: [
             ...new Set([...(previous?.department_ids ?? []), ...employee.department_ids, id])
           ],

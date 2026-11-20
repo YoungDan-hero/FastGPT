@@ -28,6 +28,8 @@ import {
   ChatAgentHelperAvatar
 } from '@fastgpt/global/core/ai/auxiliaryGeneration/chatAgentHelper';
 import { getDisplayChatTitle } from '@fastgpt/service/core/chat/title';
+import { getFeishuHandoffChatOptions } from '@fastgpt/service/core/app/feishuHandoff/service';
+import { AuthUserTypeEnum } from '@fastgpt/global/support/permission/constant';
 
 /** 统一初始化已授权来源的会话状态；来源差异仅用于解析配置和展示信息。 */
 async function handler(req: NextApiRequest): Promise<InitChatResponseType> {
@@ -126,6 +128,10 @@ async function handler(req: NextApiRequest): Promise<InitChatResponseType> {
       app: {
         ...appInfo,
         chatConfig: appChatConfig,
+        feishuHandoff:
+          isAppChat && auth.authType === AuthUserTypeEnum.token
+            ? await getFeishuHandoffChatOptions(sourceId, teamId)
+            : undefined,
         chatModels: isAppChat
           ? await getChatModelNameListByModules(nodes, { teamId: String(teamId) })
           : [],

@@ -32,6 +32,7 @@ import { resetUserModelCatalogAfterLogin } from '@/web/core/ai/model/useUserMode
 import { getFeishuLoginStartPath } from '@/web/support/user/loginRedirect/url';
 import { parseHeaderCert, TokenName } from '@fastgpt/service/support/permission/auth/common';
 import { serviceEnv } from '@fastgpt/service/env';
+import chatStyles from '@/pageComponents/chat/conversation.module.scss';
 
 const logger = getLogger(LogCategories.MODULE.CHAT.ITEM);
 
@@ -60,7 +61,10 @@ const Chat = () => {
   }, [appId, chatId, resetChatItemUIState]);
 
   return (
-    <Flex h={'100%'}>
+    <Flex
+      h={'100%'}
+      className={pane === ChatSidebarPaneEnum.RECENTLY_USED_APPS ? chatStyles.frame : undefined}
+    >
       {/* Side bar */}
       {isPc && (
         <Box

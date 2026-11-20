@@ -41,7 +41,7 @@ const ChatSliderHeader = ({ title, banner }: Props) => {
   const headerTitle = title || (isCurrentAppReady ? appName : '');
 
   return isPc ? (
-    <Flex py={4} px={[2, 2]} gap={2} alignItems={'center'} fontSize={'sm'}>
+    <Flex data-chat-ui="identity" py={4} px={[2, 2]} gap={2} alignItems={'center'} fontSize={'sm'}>
       {!title && <Avatar src={isCurrentAppReady ? appAvatar : undefined} borderRadius={'md'} />}
 
       <MyTooltip label={headerTitle} showOnlyWhenOverflow>

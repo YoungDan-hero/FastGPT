@@ -650,6 +650,7 @@ const ChatInput = ({
           {/* Send Button Container */}
           <Flex alignItems={'center'} w={9} h={9} borderRadius={'lg'}>
             <MyBox
+              data-chat-send={isChatting ? 'stop' : canSendMessage ? 'ready' : 'disabled'}
               isLoading={isStopping}
               display={'flex'}
               alignItems={'center'}
@@ -759,6 +760,7 @@ const ChatInput = ({
     >
       {/* Real Chat Input */}
       <Flex
+        data-chat-ui="composer"
         direction={'column'}
         h={getChatInputContainerHeight({ isDefaultInputHeight, workflowBuilderStyle })}
         minH={chatInputMinHeight}

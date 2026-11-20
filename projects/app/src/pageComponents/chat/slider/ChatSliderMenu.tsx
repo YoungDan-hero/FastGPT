@@ -139,6 +139,7 @@ const ChatSliderMenu = ({ menuConfirmButtonText }: Props) => {
   const ClearHistoryTrigger = (
     <Box h={'100%'}>
       <IconButton
+        data-chat-ui="clear"
         variant={'whiteBase'}
         size={'mdSquare'}
         aria-label={''}
@@ -178,6 +179,7 @@ const ChatSliderMenu = ({ menuConfirmButtonText }: Props) => {
       {isPc ? (
         <MyTooltip label={t('common:core.chat.New Chat')} shouldWrapChildren={false}>
           <Button
+            data-chat-ui="new-chat"
             variant={'whitePrimary'}
             flex={1}
             h={'36px'}

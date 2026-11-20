@@ -1,15 +1,26 @@
-import { Box, HStack } from '@chakra-ui/react';
+import { Box, Button, HStack, useDisclosure } from '@chakra-ui/react';
 import React, { useCallback, useMemo } from 'react';
 import { AppContext, TabEnum } from './context';
 import { useRouter } from 'next/router';
 import { useTranslation } from 'next-i18next';
 import { useContextSelector } from 'use-context-selector';
 import { AppTypeEnum } from '@fastgpt/global/core/app/constants';
+import { feishuHandoffAppTypes } from '@fastgpt/global/core/app/feishuHandoff';
+import { useSystemStore } from '@/web/common/system/useSystemStore';
+import dynamic from 'next/dynamic';
+
+const FeishuHandoffSettings = dynamic(() => import('./FeishuHandoffSettings'));
 
 const RouteTab = () => {
   const { t } = useTranslation();
   const router = useRouter();
   const { appDetail, currentTab } = useContextSelector(AppContext, (v) => v);
+  const feishuOrgLogin = useSystemStore((state) => state.feConfigs?.feishuOrgLogin);
+  const { isOpen, onOpen, onClose } = useDisclosure();
+  const canConfigureHandoff =
+    feishuOrgLogin &&
+    appDetail.permission.hasWritePer &&
+    feishuHandoffAppTypes.some((type) => type === appDetail.type);
 
   const setCurrentTab = useCallback(
     (tab: TabEnum) => {
@@ -64,7 +75,8 @@ const RouteTab = () => {
           key={tab.value}
           justifyContent={'center'}
           cursor={'pointer'}
-          w={'196px'}
+          w={canConfigureHandoff ? ['auto', '150px'] : '196px'}
+          px={canConfigureHandoff ? [2, 0] : undefined}
           h={8}
           fontSize={'12px'}
           fontWeight={'medium'}
@@ -84,6 +96,21 @@ const RouteTab = () => {
           <Box>{tab.label}</Box>
         </HStack>
       ))}
+      {canConfigureHandoff && (
+        <Button
+          size="sm"
+          variant="ghost"
+          fontSize="12px"
+          color="myGray.500"
+          flexShrink={0}
+          onClick={onOpen}
+        >
+          人工客服
+        </Button>
+      )}
+      {canConfigureHandoff && isOpen && (
+        <FeishuHandoffSettings key={appDetail._id} appId={appDetail._id} onClose={onClose} />
+      )}
     </HStack>
   );
 };
