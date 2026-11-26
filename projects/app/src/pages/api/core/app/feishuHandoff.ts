@@ -12,6 +12,10 @@ import { MongoApp } from '@fastgpt/service/core/app/schema';
 import { MongoFeishuHandoffGroup } from '@fastgpt/service/core/app/feishuHandoff/schema';
 import { updateFeishuHandoffSettings } from '@fastgpt/service/core/app/feishuHandoff/service';
 import { getFeishuHandoffBotCredentials } from '@fastgpt/service/core/app/feishuHandoff/bot';
+import {
+  getFeishuKnowledgeCollection,
+  getFeishuKnowledgeDataset
+} from '@fastgpt/service/core/app/feishuHandoff/knowledge';
 import { authApp } from '@fastgpt/service/support/permission/app/auth';
 import { getFeishuOrgCredentials } from '@fastgpt/service/support/user/feishu/client';
 import { getFeishuCompanyTeamId } from '@fastgpt/service/support/user/feishu/member';
@@ -26,7 +30,12 @@ export async function handler(req: ApiRequestProps, res: ApiResponseType) {
   const appId =
     mutation?.appId ??
     parseApiInput({ req, querySchema: FeishuHandoffConfigQuerySchema }).query.appId;
-  const { app } = await authApp({ req, appId, authToken: true, per: WritePermissionVal });
+  const { app, tmbId } = await authApp({
+    req,
+    appId,
+    authToken: true,
+    per: WritePermissionVal
+  });
   getFeishuOrgCredentials();
   const teamId = await getFeishuCompanyTeamId();
   if (String(app.teamId) !== teamId || !feishuHandoffAppTypes.some((type) => type === app.type)) {
@@ -37,6 +46,18 @@ export async function handler(req: ApiRequestProps, res: ApiResponseType) {
 
   if (mutation) {
     const { config } = mutation;
+    const mining = config.knowledgeMining;
+    if (config.enabled && mining?.enabled && mining.datasetId) {
+      await getFeishuKnowledgeDataset({ teamId, tmbId, datasetId: mining.datasetId });
+      if (mining.targetCollectionId) {
+        await getFeishuKnowledgeCollection({
+          teamId,
+          tmbId,
+          datasetId: mining.datasetId,
+          collectionId: mining.targetCollectionId
+        });
+      }
+    }
     await updateFeishuHandoffSettings(teamId, async () => {
       if (
         config.defaultGroupId &&
@@ -44,7 +65,12 @@ export async function handler(req: ApiRequestProps, res: ApiResponseType) {
       ) {
         throw new UserError('接待客服组已不可用，请重新选择');
       }
-      const result = await MongoApp.updateOne(filter, { feishuHandoff: config });
+      const result = await MongoApp.updateOne(filter, {
+        feishuHandoff: {
+          ...config,
+          ...(mining && { knowledgeMining: { ...mining, tmbId } })
+        }
+      });
       if (!result.matchedCount) throw new UserError('应用已删除');
     });
     return;

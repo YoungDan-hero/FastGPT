@@ -1,10 +1,60 @@
 import { describe, expect, it } from 'vitest';
 import {
+  defaultFeishuHandoffAutoClose,
+  FeishuHandoffConfigSchema,
   feishuHandoffReply,
   getFeishuHandoffMessageText,
   getFeishuHandoffRequest,
   isFeishuHandoffNoAnswer
 } from '../../../core/app/feishuHandoff';
+import { FeishuHandoffConfigBodySchema } from '../../../openapi/core/app/feishuHandoff/api';
+
+describe('客服群结束与问答沉淀配置', () => {
+  const defaultGroupId = '68ee0bd23d17260b7829b137';
+
+  it('现有接待组配置无需补齐自动解散参数', () => {
+    expect(FeishuHandoffConfigSchema.parse({ enabled: true, defaultGroupId })).toEqual({
+      enabled: true,
+      defaultGroupId
+    });
+  });
+
+  it('开启沉淀时要求同时启用自动解散并指定目标库', () => {
+    const autoClose = { ...defaultFeishuHandoffAutoClose, enabled: true };
+    const config = { enabled: true, defaultGroupId, autoClose };
+    const knowledgeMining = { enabled: true, retainDays: 30 };
+    expect(FeishuHandoffConfigSchema.safeParse({ ...config, knowledgeMining }).success).toBe(false);
+    expect(
+      FeishuHandoffConfigSchema.safeParse({
+        ...config,
+        knowledgeMining: { ...knowledgeMining, datasetId: defaultGroupId }
+      }).success
+    ).toBe(true);
+  });
+
+  it('读取旧配置时兼容只有知识库，保存启用的沉淀时要求指定手动录入集合', () => {
+    const knowledgeMining = { enabled: true, datasetId: defaultGroupId, retainDays: 30 };
+    const config = {
+      enabled: true,
+      defaultGroupId,
+      autoClose: { ...defaultFeishuHandoffAutoClose, enabled: true },
+      knowledgeMining
+    };
+    expect(FeishuHandoffConfigSchema.safeParse(config).success).toBe(true);
+    expect(FeishuHandoffConfigBodySchema.safeParse({ appId: defaultGroupId, config }).success).toBe(
+      false
+    );
+    expect(
+      FeishuHandoffConfigBodySchema.safeParse({
+        appId: defaultGroupId,
+        config: {
+          ...config,
+          knowledgeMining: { ...knowledgeMining, targetCollectionId: defaultGroupId }
+        }
+      }).success
+    ).toBe(true);
+  });
+});
 
 describe('人工客服触发', () => {
   it.each([

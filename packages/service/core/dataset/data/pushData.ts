@@ -22,6 +22,7 @@ import { checkDatasetIndexLimit } from '../../../support/permission/teamLimit';
 
 import { CommonErrEnum } from '@fastgpt/global/common/error/code/common';
 import { mongoSessionRun } from '../../../common/mongo/sessionRun';
+import type { ClientSession } from '../../../common/mongo';
 import { isAuthorizedDatasetFileS3Key } from '../../../common/s3/sources/dataset/key';
 import { createTrainingUsage } from '../../../support/wallet/usage/controller';
 
@@ -33,12 +34,14 @@ export async function pushDatasetData(
     teamId,
     tmbId,
     isRoot,
-    collection
+    collection,
+    session
   }: {
     teamId: string;
     tmbId: string;
     isRoot: boolean;
     collection: CollectionWithDatasetType;
+    session?: ClientSession;
   }
 ): Promise<PushDataResponseType> {
   // Adapter 4.9.0: support legacy trainingMode field
@@ -95,7 +98,7 @@ export async function pushDatasetData(
     return Promise.reject(CommonErrEnum.unAuthFileKey);
   }
 
-  return mongoSessionRun(async (session) => {
+  const write = async (session: ClientSession) => {
     const traingUsageId = await (async () => {
       if (billId) return billId;
       const { usageId: newUsageId } = await createTrainingUsage({
@@ -138,5 +141,7 @@ export async function pushDatasetData(
       agentModel: agentModelData,
       vlmModel: vlmModelData
     });
-  });
+  };
+  // 审核状态与问答索引任务需要同一事务提交，普通导入仍独立开启事务。
+  return session ? write(session) : mongoSessionRun(write);
 }

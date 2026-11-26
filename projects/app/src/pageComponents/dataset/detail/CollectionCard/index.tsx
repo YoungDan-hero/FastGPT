@@ -46,7 +46,7 @@ import {
   DatasetCollectionDataProcessModeMap
 } from '@fastgpt/global/core/dataset/constants';
 import { getCollectionIcon } from '@fastgpt/global/core/dataset/utils';
-import { TabEnum } from '../../../../pages/dataset/detail/index';
+import { DatasetDetailTabEnum as TabEnum } from '@/web/core/dataset/constants';
 import dynamic from 'next/dynamic';
 import SelectCollections from '@/web/core/dataset/components/SelectCollections';
 import { useToast } from '@fastgpt/web/hooks/useToast';

@@ -23,7 +23,7 @@ import MyDivider from '@fastgpt/web/components/common/MyDivider';
 import Markdown from '@/components/Markdown';
 import { useBoolean, useMemoizedFn } from 'ahooks';
 import { useScrollPagination } from '@fastgpt/web/hooks/useScrollPagination';
-import { TabEnum } from './NavBar';
+import { DatasetDetailTabEnum as TabEnum } from '@/web/core/dataset/constants';
 import {
   DatasetCollectionTypeEnum,
   ImportDataSourceEnum

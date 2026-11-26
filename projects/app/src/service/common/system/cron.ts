@@ -11,6 +11,12 @@ import { clearExpiredS3FilesCron } from '@fastgpt/service/common/s3/lifecycle/cl
 import { checkAndRunModelStatusProbe } from '@fastgpt/service/core/ai/modelStatus/service';
 import { serviceEnv } from '@fastgpt/service/env';
 import { refreshFeishuOrganization } from '@fastgpt/service/support/user/feishu/sync';
+import { getFeishuHandoffBotCredentials } from '@fastgpt/service/core/app/feishuHandoff/bot';
+import { runFeishuHandoffAutoClose } from '@fastgpt/service/core/app/feishuHandoff/autoClose';
+import { runFeishuHandoffKnowledgeExtraction } from '@fastgpt/service/core/app/feishuHandoff/knowledge';
+import { getLogger, LogCategories } from '@fastgpt/service/common/logger';
+
+const logger = getLogger(LogCategories.MODULE.USER.ACCOUNT);
 
 // Try to run train every minute
 const setTrainingQueueCron = () => {
@@ -96,5 +102,12 @@ export const startCron = () => {
   if (serviceEnv.FEISHU_ORG_ENABLED) {
     setCron('*/1 * * * *', refreshFeishuOrganization);
     void refreshFeishuOrganization();
+  }
+  if (getFeishuHandoffBotCredentials()) {
+    setCron('*/1 * * * *', () => {
+      void runFeishuHandoffAutoClose()
+        .then(runFeishuHandoffKnowledgeExtraction)
+        .catch((error) => logger.warn('Feishu handoff cron failed', { error }));
+    });
   }
 };

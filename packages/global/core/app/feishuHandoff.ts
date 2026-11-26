@@ -3,6 +3,7 @@ import { ObjectIdSchema } from '../../common/type/mongo';
 import { removeDatasetCiteText } from '../ai/llm/utils';
 import type { ChatItemValueItemType } from '../chat/type';
 import { AppTypeEnum } from './constants';
+import { DatasetTypeEnum } from '../dataset/constants';
 
 export const feishuHandoffAppTypes = [
   AppTypeEnum.simple,
@@ -10,15 +11,57 @@ export const feishuHandoffAppTypes = [
   AppTypeEnum.workflow
 ] as const;
 
+export const feishuKnowledgeDatasetTypes = [
+  DatasetTypeEnum.dataset,
+  DatasetTypeEnum.feishu
+] as const;
+
+export const defaultFeishuHandoffAutoClose = {
+  enabled: false,
+  idleMinutes: 10,
+  graceMinutes: 5,
+  prompt: '请问还有其他问题吗？如果没有，本群将在 {minutes} 分钟后自动解散。',
+  farewell: '本次咨询已结束，群聊自动解散。如有新问题，欢迎随时再次发起转人工。'
+};
+
+const FeishuHandoffAutoCloseSchema = z.object({
+  enabled: z.boolean(),
+  idleMinutes: z.number().int().min(1).max(1440),
+  graceMinutes: z.number().int().min(1).max(120),
+  prompt: z.string().trim().min(1).max(300),
+  farewell: z.string().trim().max(300)
+});
+
+const FeishuHandoffKnowledgeMiningSchema = z
+  .object({
+    enabled: z.boolean(),
+    datasetId: ObjectIdSchema.optional(),
+    targetCollectionId: ObjectIdSchema.optional().meta({
+      description: '客服问答写入的手动录入集合 ID，开启沉淀并保存时必填'
+    }),
+    retainDays: z.number().int().min(1).max(90)
+  })
+  .refine(({ datasetId, targetCollectionId }) => !targetCollectionId || Boolean(datasetId), {
+    path: ['datasetId'],
+    message: '请选择写入集合所属的知识库'
+  });
+
 export const FeishuHandoffConfigSchema = z
   .object({
     enabled: z.boolean(),
-    defaultGroupId: ObjectIdSchema.optional()
+    defaultGroupId: ObjectIdSchema.optional(),
+    autoClose: FeishuHandoffAutoCloseSchema.optional(),
+    knowledgeMining: FeishuHandoffKnowledgeMiningSchema.optional()
   })
   .refine(({ enabled, defaultGroupId }) => !enabled || Boolean(defaultGroupId), {
     path: ['defaultGroupId'],
     message: '启用转人工前请选择接待客服组'
-  });
+  })
+  .refine(
+    ({ autoClose, knowledgeMining }) =>
+      !knowledgeMining?.enabled || Boolean(autoClose?.enabled && knowledgeMining.datasetId),
+    { path: ['knowledgeMining', 'datasetId'], message: '请开启自动解散并选择沉淀知识库' }
+  );
 export type FeishuHandoffConfig = z.infer<typeof FeishuHandoffConfigSchema>;
 
 /** 旧聊天客户端通过该对象判断是否启用转接，分流选项固定为空。 */

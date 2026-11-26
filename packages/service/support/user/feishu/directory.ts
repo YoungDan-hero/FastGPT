@@ -1,3 +1,4 @@
+import pLimit from 'p-limit';
 import { z } from 'zod';
 import { feishuRequest, getFeishuTenantToken } from './client';
 
@@ -83,6 +84,7 @@ export async function readFeishuDirectory(assertValid: () => void) {
   const token = await getFeishuTenantToken();
   const roots = new Set<string>();
   const directUsers = new Set<string>();
+  let hasUserGroupScope = false;
   for await (const page of pages(
     '/contact/v3/scopes',
     {
@@ -95,14 +97,14 @@ export async function readFeishuDirectory(assertValid: () => void) {
     assertValid();
     page.department_ids.forEach((id) => roots.add(id));
     page.user_ids.forEach((id) => directUsers.add(id));
-    if (page.group_ids.length) {
-      throw new Error('Feishu directory scope must use departments or named employees');
-    }
+    hasUserGroupScope ||= page.group_ids.length > 0;
   }
 
+  // 全员通讯录也会返回用户组。飞书只在全员范围内允许查询根部门。
+  const departmentRoots = hasUserGroupScope ? ['0'] : [...roots];
   const departments = new Map<string, z.infer<typeof Department>>();
   const employees = new Map<string, FeishuEmployee>();
-  for (const id of roots) {
+  for (const id of departmentRoots) {
     assertValid();
     if (id !== '0' && !departments.has(id)) {
       const { data } = await feishuRequest(
@@ -127,25 +129,39 @@ export async function readFeishuDirectory(assertValid: () => void) {
     }
   }
 
-  for (const id of new Set([...roots, ...departments.keys()])) {
-    for await (const page of pages(
-      '/contact/v3/users/find_by_department',
-      { items: z.array(Employee).default([]) },
-      token,
-      { department_id: id }
-    )) {
+  // 控制全员同步的读取并发，仍按部门顺序合并同一员工的记录。
+  const limit = pLimit(4);
+  const departmentMembers = await limit
+    .map(new Set([...departmentRoots, ...departments.keys()]), async (id) => {
       assertValid();
-      for (const employee of page.items) {
-        const previous = employees.get(employee.open_id);
-        employees.set(employee.open_id, {
-          ...employee,
-          union_id: employee.union_id ?? previous?.union_id,
-          department_ids: [
-            ...new Set([...(previous?.department_ids ?? []), ...employee.department_ids, id])
-          ],
-          status: previous && !isActiveFeishuEmployee(previous) ? previous.status : employee.status
-        });
+      const members: FeishuEmployee[] = [];
+      for await (const page of pages(
+        '/contact/v3/users/find_by_department',
+        { items: z.array(Employee).default([]) },
+        token,
+        { department_id: id }
+      )) {
+        assertValid();
+        members.push(...page.items);
       }
+      return { id, members };
+    })
+    .catch((error) => {
+      limit.clearQueue();
+      throw error;
+    });
+
+  for (const { id, members } of departmentMembers) {
+    for (const employee of members) {
+      const previous = employees.get(employee.open_id);
+      employees.set(employee.open_id, {
+        ...employee,
+        union_id: employee.union_id ?? previous?.union_id,
+        department_ids: [
+          ...new Set([...(previous?.department_ids ?? []), ...employee.department_ids, id])
+        ],
+        status: previous && !isActiveFeishuEmployee(previous) ? previous.status : employee.status
+      });
     }
   }
   for (const id of directUsers) {

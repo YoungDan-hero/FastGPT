@@ -1,0 +1,328 @@
+name: maiya-studio
+
+x-service: &service
+  restart: unless-stopped
+  logging:
+    driver: json-file
+    options:
+      max-size: 10m
+      max-file: '3'
+
+x-storage: &storage
+  STORAGE_VENDOR: minio
+  STORAGE_REGION: us-east-1
+  STORAGE_ACCESS_KEY_ID: ${STORAGE_ACCESS_KEY_ID:-maiya-storage}
+  STORAGE_SECRET_ACCESS_KEY: ${STORAGE_SECRET_ACCESS_KEY:?set STORAGE_SECRET_ACCESS_KEY}
+  STORAGE_PUBLIC_BUCKET: fastgpt-public
+  STORAGE_PRIVATE_BUCKET: fastgpt-private
+  STORAGE_S3_ENDPOINT: http://storage:9000
+  STORAGE_S3_FORCE_PATH_STYLE: 'true'
+  STORAGE_DOWNLOAD_URL_MODE: short-proxy
+
+x-mongo-auth: &mongo-auth
+  MONGO_INITDB_ROOT_USERNAME: maiya
+  MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD:?set MONGO_PASSWORD}
+
+services:
+  app:
+    <<: *service
+    image: ${MAIYA_APP_IMAGE:-maiya-studio:4.18.0.2-20261124}
+    build:
+      context: ../..
+      dockerfile: projects/app/Dockerfile
+    ports:
+      - '127.0.0.1:${MAIYA_APP_PORT:-13100}:3000'
+    networks: [default, sandbox, mcp]
+    environment:
+      <<: *storage
+      HOSTNAME: 0.0.0.0
+      SYSTEM_NAME: Maiya Studio
+      FE_DOMAIN: ${MAIYA_PUBLIC_URL:-http://127.0.0.1:13100}
+      AUTH_COOKIE_SECURE: ${MAIYA_COOKIE_SECURE:-false}
+      FEISHU_ORG_ENABLED: ${FEISHU_ORG_ENABLED:-false}
+      FEISHU_ORG_APP_ID: ${FEISHU_ORG_APP_ID:-}
+      FEISHU_ORG_APP_SECRET: ${FEISHU_ORG_APP_SECRET:-}
+      FEISHU_ORG_PROTECTED_ADMIN_OPEN_ID: ${FEISHU_ORG_PROTECTED_ADMIN_OPEN_ID:-}
+      FEISHU_BOT_APP_ID: ${FEISHU_BOT_APP_ID:-}
+      FEISHU_BOT_APP_SECRET: ${FEISHU_BOT_APP_SECRET:-}
+      ROOT_KEY: ${ROOT_KEY:?set ROOT_KEY}
+      FILE_TOKEN_KEY: ${FILE_TOKEN_KEY:?set FILE_TOKEN_KEY}
+      AES256_SECRET_KEY: ${AES256_SECRET_KEY:?set AES256_SECRET_KEY}
+      INVOKE_TOKEN_SECRET: ${INVOKE_TOKEN_SECRET:?set INVOKE_TOKEN_SECRET}
+      MONGODB_URI: mongodb://maiya:${MONGO_PASSWORD}@mongo:27017/fastgpt?authSource=admin&replicaSet=rs0
+      PG_URL: postgresql://maiya:${PG_PASSWORD:?set PG_PASSWORD}@vector:5432/fastgpt
+      REDIS_URL: redis://default:${REDIS_PASSWORD:?set REDIS_PASSWORD}@redis:6379
+      AIPROXY_API_ENDPOINT: http://aiproxy:3000
+      AIPROXY_API_TOKEN: ${AIPROXY_API_TOKEN:?set AIPROXY_API_TOKEN}
+      PLUGIN_BASE_URL: http://plugin:3004
+      PLUGIN_TOKEN: ${PLUGIN_TOKEN:?set PLUGIN_TOKEN}
+      CODE_SANDBOX_URL: http://code-sandbox:3000
+      CODE_SANDBOX_TOKEN: ${CODE_SANDBOX_TOKEN:?set CODE_SANDBOX_TOKEN}
+      SSE_MCP_SERVER_PROXY_ENDPOINT: ${MCP_SSE_PUBLIC_URL:-http://127.0.0.1:13103}
+      CUSTOM_PDF_PARSE_URL: http://pdf-parser:13006/v2/parse/file
+      CUSTOM_PDF_PARSE_KEY: ${PDF_PARSE_KEY:?set PDF_PARSE_KEY}
+      LOG_CONSOLE_LEVEL: info
+    depends_on:
+      mongo-bootstrap:
+        condition: service_completed_successfully
+      model-channels:
+        condition: service_completed_successfully
+      vector:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      storage:
+        condition: service_healthy
+      plugin:
+        condition: service_healthy
+      code-sandbox:
+        condition: service_healthy
+      pdf-parser:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD, curl, -fsS, http://127.0.0.1:3000/api/system/file/health]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+
+  mongo:
+    <<: *service
+    image: mongo:8.0.34
+    environment: *mongo-auth
+    entrypoint:
+      - /bin/bash
+      - -ec
+      - |
+        key=/data/configdb/replica.key
+        if [ ! -s "$$key" ]; then
+          umask 077
+          openssl rand -base64 96 > "$$key.tmp"
+          chmod 0400 "$$key.tmp"
+          chown mongodb:mongodb "$$key.tmp"
+          mv "$$key.tmp" "$$key"
+        fi
+        exec docker-entrypoint.sh mongod --bind_ip_all --replSet rs0 --keyFile "$$key"
+    volumes:
+      - mongo-data:/data/db
+      - mongo-config:/data/configdb
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          mongosh --quiet -u "$$MONGO_INITDB_ROOT_USERNAME" -p "$$MONGO_INITDB_ROOT_PASSWORD"
+          --authenticationDatabase admin --eval 'quit(db.adminCommand({getCmdLineOpts:1}).parsed.replication?.replSet === "rs0" ? 0 : 1)'
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 15s
+
+  mongo-bootstrap:
+    image: mongo:8.0.34
+    environment: *mongo-auth
+    depends_on:
+      mongo:
+        condition: service_healthy
+    entrypoint: [/bin/bash, -ec]
+    command:
+      - >-
+        exec mongosh 'mongodb://mongo:27017/fastgpt?directConnection=true' --quiet
+        -u "$$MONGO_INITDB_ROOT_USERNAME" -p "$$MONGO_INITDB_ROOT_PASSWORD" --authenticationDatabase admin
+        --file /seed/seed-mongo.js
+    volumes:
+      - ./seed-mongo.js:/seed/seed-mongo.js:ro
+      - ./seed.json:/seed/seed.json:ro
+
+  vector:
+    <<: *service
+    image: pgvector/pgvector:0.8.0-pg15
+    environment:
+      POSTGRES_USER: maiya
+      POSTGRES_DB: fastgpt
+      POSTGRES_PASSWORD: ${PG_PASSWORD:?set PG_PASSWORD}
+    volumes:
+      - vector-data:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -h 127.0.0.1 -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    <<: *service
+    image: redis:7.2-alpine
+    environment:
+      REDISCLI_AUTH: ${REDIS_PASSWORD:?set REDIS_PASSWORD}
+    command: [/bin/sh, -ec, 'exec redis-server --requirepass "$$REDISCLI_AUTH" --appendonly yes --maxmemory-policy noeviction']
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: [CMD, redis-cli, ping]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  storage:
+    <<: *service
+    image: rustfs/rustfs:1.0.4
+    security_opt: [no-new-privileges:true]
+    environment:
+      RUSTFS_ACCESS_KEY: ${STORAGE_ACCESS_KEY_ID:-maiya-storage}
+      RUSTFS_SECRET_KEY: ${STORAGE_SECRET_ACCESS_KEY:?set STORAGE_SECRET_ACCESS_KEY}
+      RUSTFS_VOLUMES: /data
+      RUSTFS_ADDRESS: ':9000'
+      RUSTFS_CONSOLE_ENABLE: 'false'
+      RUSTFS_OBS_LOG_DIRECTORY: /logs
+      RUSTFS_OBS_LOGGER_LEVEL: error
+    volumes:
+      - storage-data:/data
+    healthcheck:
+      test: [CMD, curl, -fsS, http://127.0.0.1:9000/health]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 10s
+
+  plugin:
+    <<: *service
+    image: ghcr.io/labring/fastgpt-plugin:v1.2.0
+    environment:
+      <<: *storage
+      PORT: '3004'
+      AUTH_TOKEN: ${PLUGIN_TOKEN:?set PLUGIN_TOKEN}
+      FASTGPT_BASE_URL: http://app:3000
+      MONGODB_URI: mongodb://maiya:${MONGO_PASSWORD}@mongo:27017/fastgpt-plugin?authSource=admin&replicaSet=rs0
+      REDIS_URL: redis://default:${REDIS_PASSWORD}@redis:6379
+      LOG_CONSOLE_LEVEL: info
+    depends_on:
+      mongo-bootstrap:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+      storage:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD, curl, -fsS, http://127.0.0.1:3004/health]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 15s
+
+  aiproxy:
+    <<: *service
+    image: ghcr.io/labring/aiproxy:v0.7.7
+    environment:
+      ADMIN_KEY: ${AIPROXY_API_TOKEN:?set AIPROXY_API_TOKEN}
+      SQLITE_PATH: /aiproxy/aiproxy.db
+      BILLING_ENABLED: 'false'
+      DISABLE_MODEL_CONFIG: 'true'
+      LOG_DETAIL_STORAGE_HOURS: '1'
+      RETRY_TIMES: '2'
+    volumes:
+      - aiproxy-data:/aiproxy
+    healthcheck:
+      test: [CMD, curl, -fsS, http://127.0.0.1:3000/api/status]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  model-channels:
+    image: node:24.22.1-bookworm-slim
+    user: node
+    depends_on:
+      aiproxy:
+        condition: service_healthy
+    environment:
+      AIPROXY_API_TOKEN: ${AIPROXY_API_TOKEN:?set AIPROXY_API_TOKEN}
+      DASHSCOPE_API_KEY: ${DASHSCOPE_API_KEY:?set DASHSCOPE_API_KEY}
+      ARK_API_KEY: ${ARK_API_KEY:?set ARK_API_KEY}
+    command: [node, /seed/seed-aiproxy.mjs]
+    volumes:
+      - ./seed-aiproxy.mjs:/seed/seed-aiproxy.mjs:ro
+
+  code-sandbox:
+    <<: *service
+    image: ghcr.io/labring/fastgpt-code-sandbox:v5.0.0
+    networks: [sandbox]
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    cap_add: [CHOWN, DAC_OVERRIDE, FOWNER, KILL, SETGID, SETUID, SYS_CHROOT]
+    tmpfs:
+      - /tmp/fastgpt-python-sandbox/tmp:rw,noexec,nosuid,nodev,size=512m,mode=0755
+    environment:
+      SANDBOX_TOKEN: ${CODE_SANDBOX_TOKEN:?set CODE_SANDBOX_TOKEN}
+      SANDBOX_POOL_SIZE: '2'
+      CHECK_INTERNAL_IP: 'true'
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:3000/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  mcp-sse:
+    <<: *service
+    image: ghcr.io/labring/fastgpt-mcp_server@sha256:364958f42f56902704a3e70cabad5ac36b334de05d344323932c99b25cf71249
+    networks: [mcp]
+    environment:
+      FASTGPT_ENDPOINT: http://app:3000
+      PORT: '3000'
+      LOG_CONSOLE_LEVEL: warn
+    depends_on:
+      app:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:3000/').then(r => process.exit(r.status === 404 ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  mcp-gateway:
+    <<: *service
+    image: nginx:1.28-alpine
+    networks: [mcp]
+    depends_on:
+      mcp-sse:
+        condition: service_healthy
+    ports:
+      - '127.0.0.1:${MAIYA_MCP_PORT:-13103}:8080'
+    volumes:
+      - ./mcp-nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    healthcheck:
+      test: [CMD, wget, -qO, /dev/null, http://127.0.0.1:8080/health]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  pdf-parser:
+    <<: *service
+    image: ${MAIYA_PDF_IMAGE:-maiya-pdf-parser:4.2.3}
+    build:
+      context: ../pdf-parser
+    security_opt: [no-new-privileges:true]
+    environment:
+      FASTGPT_PDF_PARSE_KEY: ${PDF_PARSE_KEY:?set PDF_PARSE_KEY}
+      MINERU_MODEL_SOURCE: ${PDF_MODEL_SOURCE:-auto}
+      HTTPS_PROXY: ${PDF_MODEL_HTTPS_PROXY:-}
+      NO_PROXY: localhost,127.0.0.1,pdf-parser
+    volumes:
+      - pdf-cache:/var/lib/mineru
+    healthcheck:
+      test: [CMD, python, -c, 'import urllib.request; urllib.request.urlopen("http://127.0.0.1:13006/health", timeout=3).close()']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+networks:
+  sandbox:
+  mcp:
+
+volumes:
+  mongo-data:
+  mongo-config:
+  vector-data:
+  redis-data:
+  storage-data:
+  aiproxy-data:
+  pdf-cache:

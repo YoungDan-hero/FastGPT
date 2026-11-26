@@ -4,8 +4,15 @@ import {
   FeishuHandoffConfigBodySchema,
   FeishuHandoffConfigQuerySchema,
   FeishuHandoffConfigResponseSchema,
+  FeishuHandoffDatasetKnowledgePageSchema,
+  FeishuHandoffDatasetKnowledgeQuerySchema,
   FeishuHandoffGroupMutationSchema,
   FeishuHandoffGroupsResponseSchema,
+  FeishuHandoffKnowledgeCountsBodySchema,
+  FeishuHandoffKnowledgeCountsSchema,
+  FeishuHandoffKnowledgeListSchema,
+  FeishuHandoffKnowledgeQuerySchema,
+  FeishuHandoffKnowledgeReviewSchema,
   FeishuHandoffResponseSchema
 } from './api';
 
@@ -37,7 +44,7 @@ export const FeishuHandoffPath: OpenAPIPath = {
       requestParams: { query: FeishuHandoffConfigQuerySchema },
       responses: {
         200: {
-          description: '应用配置和可选客服组',
+          description: '应用转人工、自动解散与沉淀配置，以及可选客服组',
           content: { 'application/json': { schema: FeishuHandoffConfigResponseSchema } }
         }
       }
@@ -47,6 +54,53 @@ export const FeishuHandoffPath: OpenAPIPath = {
       tags: ['App'],
       requestBody: { content: { 'application/json': { schema: FeishuHandoffConfigBodySchema } } },
       responses: { 200: { description: '配置已保存' } }
+    }
+  },
+  '/core/app/feishuHandoffKnowledge': {
+    get: {
+      summary: '列出当前成员可审核的客服沉淀问答，可按应用筛选',
+      tags: ['App', 'Dataset'],
+      requestParams: { query: FeishuHandoffKnowledgeQuerySchema },
+      responses: {
+        200: {
+          description: '待审核问答、来源应用、目标知识库及客服答复证据',
+          content: { 'application/json': { schema: FeishuHandoffKnowledgeListSchema } }
+        }
+      }
+    },
+    post: {
+      summary: '审核并发布或驳回客服沉淀问答',
+      tags: ['App', 'Dataset'],
+      requestBody: {
+        content: { 'application/json': { schema: FeishuHandoffKnowledgeReviewSchema } }
+      },
+      responses: { 200: { description: '审核结果已保存' } }
+    }
+  },
+  '/core/dataset/feishuHandoffKnowledge': {
+    get: {
+      summary: '列出当前知识库的待审核客服问答',
+      tags: ['Dataset', 'App'],
+      requestParams: { query: FeishuHandoffDatasetKnowledgeQuerySchema },
+      responses: {
+        200: {
+          description: '单库待审核问答的分页结果和待审集合选项',
+          content: { 'application/json': { schema: FeishuHandoffDatasetKnowledgePageSchema } }
+        }
+      }
+    },
+    post: {
+      summary: '按知识库统计待审核客服问答数',
+      tags: ['Dataset', 'App'],
+      requestBody: {
+        content: { 'application/json': { schema: FeishuHandoffKnowledgeCountsBodySchema } }
+      },
+      responses: {
+        200: {
+          description: '有可审核问答的知识库及其待审数量',
+          content: { 'application/json': { schema: FeishuHandoffKnowledgeCountsSchema } }
+        }
+      }
     }
   },
   '/core/chat/feishuHandoff': {

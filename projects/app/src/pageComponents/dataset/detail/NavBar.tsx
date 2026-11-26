@@ -9,16 +9,15 @@ import LightRowTabs from '@fastgpt/web/components/common/Tabs/LightRowTabs';
 import { useSystem } from '@fastgpt/web/hooks/useSystem';
 import FolderPath from '@/components/common/folder/Path';
 import MyTooltip from '@fastgpt/web/components/common/MyTooltip';
+import { DatasetDetailTabEnum as TabEnum } from '@/web/core/dataset/constants';
 
-export enum TabEnum {
-  dataCard = 'dataCard',
-  collectionCard = 'collectionCard',
-  test = 'test',
-  info = 'info',
-  import = 'import'
-}
-
-const NavBar = ({ currentTab }: { currentTab: TabEnum }) => {
+const NavBar = ({
+  currentTab,
+  canReviewHandoff
+}: {
+  currentTab: TabEnum;
+  canReviewHandoff: boolean;
+}) => {
   const theme = useTheme();
   const { t } = useTranslation();
   const router = useRouter();
@@ -32,6 +31,7 @@ const NavBar = ({ currentTab }: { currentTab: TabEnum }) => {
       value: TabEnum.collectionCard
     },
     { label: t('common:core.dataset.test.Search Test'), value: TabEnum.test },
+    ...(canReviewHandoff ? [{ label: '待审核问答', value: TabEnum.handoffReview }] : []),
     ...(datasetDetail.permission.hasManagePer && !isPc
       ? [{ label: t('common:Config'), value: TabEnum.info }]
       : [])
@@ -56,10 +56,9 @@ const NavBar = ({ currentTab }: { currentTab: TabEnum }) => {
           pb={2}
           pt={3}
           px={4}
-          justify={'space-between'}
+          align={'center'}
           borderBottom={currentTab === TabEnum.dataCard ? 'none' : theme.borders.base}
           borderColor={'myGray.200'}
-          position={'relative'}
         >
           {currentTab === TabEnum.dataCard ? (
             <>
@@ -104,7 +103,18 @@ const NavBar = ({ currentTab }: { currentTab: TabEnum }) => {
               </Flex>
             </>
           ) : (
-            <Flex py={'0.38rem'} px={2} h={10} ml={0.5}>
+            <Flex
+              py={'0.38rem'}
+              px={2}
+              h={10}
+              ml={0.5}
+              flex={1}
+              minW={0}
+              alignItems="center"
+              sx={{
+                '& > div, & > div > div': { minW: 0 }
+              }}
+            >
               <FolderPath
                 paths={paths}
                 onClick={(e) => {
@@ -114,30 +124,34 @@ const NavBar = ({ currentTab }: { currentTab: TabEnum }) => {
             </Flex>
           )}
 
-          <Box position={'absolute'} left={'50%'} transform={'translateX(-50%)'}>
-            <LightRowTabs<TabEnum>
-              px={4}
-              py={1}
-              visibility={currentTab === TabEnum.dataCard ? 'hidden' : 'visible'}
-              flex={1}
-              mx={'auto'}
-              w={'100%'}
-              list={tabList}
-              value={currentTab}
-              activeColor="primary.700"
-              onChange={setCurrentTab}
-              inlineStyles={{
-                fontSize: '1rem',
-                lineHeight: '1.5rem',
-                fontWeight: 500,
-                border: 'none',
-                _hover: {
-                  bg: 'myGray.05'
-                },
-                borderRadius: '6px'
-              }}
-            />
-          </Box>
+          {currentTab !== TabEnum.dataCard && (
+            <>
+              <Box flexShrink={0}>
+                <LightRowTabs<TabEnum>
+                  px={4}
+                  py={1}
+                  flex={1}
+                  mx={'auto'}
+                  w={'100%'}
+                  list={tabList}
+                  value={currentTab}
+                  activeColor="primary.700"
+                  onChange={setCurrentTab}
+                  inlineStyles={{
+                    fontSize: '1rem',
+                    lineHeight: '1.5rem',
+                    fontWeight: 500,
+                    border: 'none',
+                    _hover: {
+                      bg: 'myGray.05'
+                    },
+                    borderRadius: '6px'
+                  }}
+                />
+              </Box>
+              <Box flex={1} />
+            </>
+          )}
         </Flex>
       ) : (
         <Box mb={2}>

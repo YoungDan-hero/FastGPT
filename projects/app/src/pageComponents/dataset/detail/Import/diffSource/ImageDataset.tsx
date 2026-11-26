@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Box, Button, Flex, Input, Image } from '@chakra-ui/react';
 import { useTranslation } from 'next-i18next';
 import { useRouter } from 'next/router';
-import { TabEnum } from '../../NavBar';
+import { DatasetDetailTabEnum as TabEnum } from '@/web/core/dataset/constants';
 import { createImageDatasetCollection } from '@/web/core/dataset/image/api';
 import FormLabel from '@fastgpt/web/components/common/MyBox/FormLabel';
 import { useForm } from 'react-hook-form';

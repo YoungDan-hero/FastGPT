@@ -80,6 +80,10 @@ const nextConfig: NextConfig = {
       }
     }
   },
+  webpack(config) {
+    config.module.rules.push({ test: /\.svg$/i, use: ['@svgr/webpack'] });
+    return config;
+  },
   transpilePackages: ['@modelcontextprotocol/sdk', 'ahooks'],
   serverExternalPackages: [
     '@node-rs/jieba',
@@ -95,6 +99,8 @@ const nextConfig: NextConfig = {
     optimizePackageImports: optimizedPackageImports,
     // 减少内存占用
     memoryBasedWorkersCount: true,
+    webpackBuildWorker: true,
+    webpackMemoryOptimizations: true,
 
     turbopackFileSystemCacheForBuild: false,
     turbopackFileSystemCacheForDev: false

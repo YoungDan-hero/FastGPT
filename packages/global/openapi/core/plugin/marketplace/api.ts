@@ -3,7 +3,7 @@ import { IntSchema } from '../../../../common/zod';
 import { PaginationResponseSchema, createPaginationSchema } from '../../../api';
 import { PluginTextSchema, PluginToolTagSchema } from '../../../../core/plugin/type';
 import { LanguageSchema } from '../../../../common/i18n/type';
-import { PluginPermissionListSchema } from '../../../../sdk/fastgpt-plugin';
+import { PluginPermissionSchema } from '../../../../core/plugin/schema/permission';
 
 export const MarketplaceOfficialSource = 'official';
 export const MarketplaceCommunitySource = 'community';
@@ -146,10 +146,13 @@ export const MarketplaceToolDetailItemSchema = MarketplaceToolBaseSchema.extend(
     example: { en: 'Initial release', 'zh-CN': '首次发布' },
     description: '版本更新说明'
   }),
-  permission: PluginPermissionListSchema.optional().meta({
-    example: ['userInfo:read'],
-    description: '工具运行所需的 FastGPT 权限'
-  }),
+  permission: z
+    .array(PluginPermissionSchema)
+    .optional()
+    .meta({
+      example: ['userInfo:read'],
+      description: '工具运行所需的 FastGPT 权限'
+    }),
   readme: z.string().meta({
     example: 'https://example.com/readme.md',
     description: 'README 内容或地址'

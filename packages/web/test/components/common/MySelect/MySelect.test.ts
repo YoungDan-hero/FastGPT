@@ -24,6 +24,64 @@ describe('MySelect scroll pagination and remote search behavior', () => {
     container.remove();
   });
 
+  it('renders a small window and searches all options in a large local list', async () => {
+    const onChange = vi.fn();
+    const list = Array.from({ length: 3478 }, (_, index) => ({
+      label: `员工 ${index + 1}`,
+      value: `employee-${index + 1}`
+    }));
+
+    await act(async () => {
+      root.render(
+        React.createElement(
+          ChakraProvider,
+          null,
+          React.createElement(MySelect, { isSearch: true, virtualScroll: true, list, onChange })
+        )
+      );
+    });
+
+    expect(container.querySelectorAll('[role="menuitem"]')).toHaveLength(0);
+    const trigger = container.querySelector('button')!;
+    await act(async () => {
+      trigger.click();
+    });
+
+    const menu = container.querySelector<HTMLElement>('[role="menu"]')!;
+    // Chakra 会在菜单关闭时调用浏览器的 scrollTo，JSDOM 没有实现。
+    menu.scrollTo = vi.fn();
+    const visibleItems = menu.querySelectorAll('[role="menuitem"]');
+    expect(visibleItems.length).toBeGreaterThan(0);
+    expect(visibleItems.length).toBeLessThan(30);
+    expect(menu.textContent).not.toContain('员工 3478');
+
+    const viewport = visibleItems[0].parentElement!.parentElement!;
+    await act(async () => {
+      viewport.scrollTop = 1_000_000;
+      viewport.dispatchEvent(new Event('scroll'));
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    });
+    expect(menu.textContent).toContain('员工 3478');
+    expect(menu.querySelectorAll('[role="menuitem"]').length).toBeLessThan(30);
+
+    const input = menu.querySelector('input')!;
+    await act(async () => {
+      const valueSetter = Object.getOwnPropertyDescriptor(
+        window.HTMLInputElement.prototype,
+        'value'
+      )?.set;
+      valueSetter?.call(input, '员工 1234');
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+
+    const matchedItem = menu.querySelector<HTMLButtonElement>('[role="menuitem"]')!;
+    expect(matchedItem.textContent).toBe('员工 1234');
+    await act(async () => {
+      matchedItem.click();
+    });
+    expect(onChange).toHaveBeenCalledWith('employee-1234');
+  });
+
   it('delegates overflow scrolling to ScrollData and skips client filtering when onSearchChange is provided', async () => {
     const onSearchChange = vi.fn();
     let capturedScrollProps: Record<string, unknown> | undefined;

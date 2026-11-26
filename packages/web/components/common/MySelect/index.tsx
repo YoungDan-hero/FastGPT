@@ -22,6 +22,7 @@ import type { ButtonProps, MenuItemProps, MenuProps } from '@chakra-ui/react';
 import MyIcon from '../Icon';
 import { useRequest } from '../../../hooks/useRequest';
 import { useCloseOnFlowNodeDragAreaPointerDown } from '../../../hooks/useCloseOnFlowNodeDragAreaPointerDown';
+import { useStaticVirtualList } from '../../../hooks/useVirtualList';
 import MyDivider from '../MyDivider';
 import type { useScrollPagination } from '../../../hooks/useScrollPagination';
 import Avatar from '../Avatar';
@@ -58,6 +59,8 @@ export type SelectProps<T = any> = Omit<ButtonProps, 'onChange' | 'value'> & {
   isListLoading?: boolean;
   onChange?: (val: T) => any | Promise<any>;
   ScrollData?: ReturnType<typeof useScrollPagination>['ScrollData'];
+  /** 已加载的大型单行选项列表使用虚拟滚动。 */
+  virtualScroll?: boolean;
   customOnOpen?: () => void;
   customOnClose?: () => void;
   menuPlacement?: MenuProps['placement'];
@@ -82,6 +85,8 @@ export const menuItemStyles: MenuItemProps = {
   }
 };
 
+const virtualRowHeight = 36;
+
 const MySelect = <T = any,>(
   {
     bg = '#fff',
@@ -96,6 +101,7 @@ const MySelect = <T = any,>(
     isLoading = false,
     isListLoading = false,
     ScrollData,
+    virtualScroll = false,
     customOnOpen,
     customOnClose,
     menuPlacement,
@@ -115,7 +121,11 @@ const MySelect = <T = any,>(
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   const { isOpen, onOpen: defaultOnOpen, onClose: defaultOnClose } = useDisclosure();
-  const selectItem = useMemo(() => list.find((item) => item.value === value), [list, value]);
+  const selectedIndex = useMemo(
+    () => list.findIndex((item) => item.value === value),
+    [list, value]
+  );
+  const selectItem = list[selectedIndex];
 
   const [search, setSearch] = useState('');
 
@@ -143,6 +153,19 @@ const MySelect = <T = any,>(
     return filterSelectOptionsBySearch(list, search);
   }, [list, onSearchChange, search, isSearch]);
 
+  const shouldUseVirtualList = virtualScroll && !ScrollData;
+  const {
+    containerRef: virtualListRef,
+    virtualDataList,
+    topPlaceholderHeight,
+    bottomPlaceholderHeight,
+    scrollToTop
+  } = useStaticVirtualList({
+    data: filterList,
+    itemHeight: virtualRowHeight,
+    overscan: 6
+  });
+
   useImperativeHandle(ref, () => ({
     focus() {
       onOpen();
@@ -151,74 +174,85 @@ const MySelect = <T = any,>(
 
   // Auto scroll
   useEffect(() => {
-    if (isOpen && !ScrollData && MenuListRef.current && SelectedItemRef.current) {
+    if (!isOpen || ScrollData) return;
+    if (shouldUseVirtualList && virtualListRef.current && selectedIndex >= 0) {
+      virtualListRef.current.scrollTop = Math.max(0, (selectedIndex - 2) * virtualRowHeight);
+    } else if (MenuListRef.current && SelectedItemRef.current) {
       const menu = MenuListRef.current;
       const selectedItem = SelectedItemRef.current;
       menu.scrollTop = selectedItem.offsetTop - menu.offsetTop - 100;
     }
-  }, [ScrollData, isOpen]);
+  }, [ScrollData, isOpen, selectedIndex, shouldUseVirtualList, virtualListRef]);
 
   const { runAsync: onClickChange, loading } = useRequest((val: T) => onChange?.(val));
 
   const ListRender = useMemo(() => {
-    return (
-      <>
-        {filterList.length > 0 ? (
-          filterList.map((item, i) => (
-            <Box key={i}>
-              <MenuItem
-                {...menuItemStyles}
-                {...(value === item.value
-                  ? {
-                      ref: SelectedItemRef,
-                      color: 'primary.700',
-                      bg: 'myGray.100'
-                    }
-                  : {
-                      color: 'myGray.900'
-                    })}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  if (value !== item.value) {
-                    onClickChange(item.value);
-                  }
-                }}
-                whiteSpace={'pre-wrap'}
-                fontSize={'sm'}
-                display={'block'}
-                mb={0.5}
-              >
-                <Flex alignItems={'center'}>
-                  {item.icon && (
-                    <Avatar mr={2} src={item.icon as any} w={item.iconSize ?? '1rem'} />
-                  )}
-                  {item.label}
-                </Flex>
-                {item.description && (
-                  <Box color={'myGray.500'} fontSize={'xs'}>
-                    {item.description}
-                  </Box>
-                )}
-              </MenuItem>
-              {item.showBorder && <MyDivider my={2} />}
-            </Box>
-          ))
-        ) : isListLoading ? (
-          <Flex justifyContent={'center'} py={2}>
-            <MyIcon name={'common/loading'} w={'1rem'} />
+    if (!filterList.length) {
+      return isListLoading ? (
+        <Flex justifyContent={'center'} py={2}>
+          <MyIcon name={'common/loading'} w={'1rem'} />
+        </Flex>
+      ) : (
+        <EmptyTip py={0} />
+      );
+    }
+
+    const renderItem = (item: (typeof filterList)[number], i: number) => (
+      <Box key={i}>
+        <MenuItem
+          {...menuItemStyles}
+          {...(value === item.value
+            ? {
+                ref: SelectedItemRef,
+                color: 'primary.700',
+                bg: 'myGray.100'
+              }
+            : {
+                color: 'myGray.900'
+              })}
+          onClick={(e) => {
+            e.stopPropagation();
+            if (value !== item.value) {
+              onClickChange(item.value);
+            }
+          }}
+          whiteSpace={'pre-wrap'}
+          fontSize={'sm'}
+          display={'block'}
+          mb={0.5}
+          {...(shouldUseVirtualList && {
+            h: `${virtualRowHeight}px`,
+            py: 0,
+            mb: 0,
+            _notLast: { mb: 0 },
+            whiteSpace: 'nowrap',
+            title: typeof item.label === 'string' ? item.label : undefined
+          })}
+        >
+          <Flex alignItems={'center'}>
+            {item.icon && <Avatar mr={2} src={item.icon as any} w={item.iconSize ?? '1rem'} />}
+            {shouldUseVirtualList ? <Box noOfLines={1}>{item.label}</Box> : item.label}
           </Flex>
-        ) : (
-          <EmptyTip py={0} />
-        )}
-      </>
+          {item.description && (
+            <Box color={'myGray.500'} fontSize={'xs'}>
+              {item.description}
+            </Box>
+          )}
+        </MenuItem>
+        {item.showBorder && <MyDivider my={2} />}
+      </Box>
     );
-  }, [filterList, isListLoading, onClickChange, value]);
+    return shouldUseVirtualList
+      ? virtualDataList.map(({ data, index }) => renderItem(data, index))
+      : filterList.map(renderItem);
+  }, [filterList, isListLoading, onClickChange, shouldUseVirtualList, value, virtualDataList]);
 
   const isSelecting = loading || isLoading;
   return (
     <Box ref={MenuRef}>
       <Menu
         autoSelect={isSearch}
+        isLazy={shouldUseVirtualList}
         initialFocusRef={isSearch ? searchInputRef : undefined}
         isOpen={isOpen && !isSelecting}
         onOpen={onOpen}
@@ -307,9 +341,9 @@ const MySelect = <T = any,>(
           }
           zIndex={99}
           maxH={'45vh'}
-          display={ScrollData ? 'flex' : undefined}
-          flexDirection={ScrollData ? 'column' : undefined}
-          overflowY={ScrollData ? 'hidden' : 'auto'}
+          display={ScrollData || shouldUseVirtualList ? 'flex' : undefined}
+          flexDirection={ScrollData || shouldUseVirtualList ? 'column' : undefined}
+          overflowY={ScrollData || shouldUseVirtualList ? 'hidden' : 'auto'}
           onClick={(e) => {
             e.stopPropagation();
           }}
@@ -321,6 +355,7 @@ const MySelect = <T = any,>(
                 value={search}
                 placeholder={t('common:Search')}
                 onChange={(val) => {
+                  scrollToTop();
                   setSearch(val);
                   onSearchChange?.(val);
                 }}
@@ -337,6 +372,19 @@ const MySelect = <T = any,>(
             >
               {ListRender}
             </ScrollData>
+          ) : shouldUseVirtualList && filterList.length > 0 ? (
+            <Box
+              ref={virtualListRef}
+              minH={0}
+              h={`${Math.min(filterList.length, 8) * virtualRowHeight}px`}
+              overflowY={'auto'}
+            >
+              {topPlaceholderHeight > 0 && <Box h={`${topPlaceholderHeight}px`} aria-hidden />}
+              {ListRender}
+              {bottomPlaceholderHeight > 0 && (
+                <Box h={`${bottomPlaceholderHeight}px`} aria-hidden />
+              )}
+            </Box>
           ) : (
             ListRender
           )}

@@ -5,49 +5,40 @@ WORKDIR /app
 ARG proxy
 
 RUN [ -z "$proxy" ] || sed -i 's/deb.debian.org/mirrors.ustc.edu.cn/g' /etc/apt/sources.list.d/debian.sources
-RUN npm install -g pnpm@10.33.2
+RUN npm install -g pnpm@10.33.4
 
 # copy packages and one project
-COPY pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.json .npmrc ./
 COPY ./packages ./packages
 COPY ./sdk ./sdk
 COPY ./projects/app/package.json ./projects/app/package.json
 
 RUN [ -f pnpm-lock.yaml ] || (echo "Lockfile not found." && exit 1)
 
-# if proxy exists, set proxy
-RUN if [ -z "$proxy" ]; then \
-        pnpm i; \
+# The production build uses jsdom without its optional native canvas peer.
+ENV HUSKY=0 MONGOMS_DISABLE_POSTINSTALL=1
+RUN --mount=type=cache,target=/root/.local/share/pnpm/store \
+    sed -i '/^  - canvas$/d' pnpm-workspace.yaml && \
+    if [ -z "$proxy" ]; then \
+        pnpm install --frozen-lockfile; \
     else \
-        pnpm i --registry=https://registry.npmmirror.com; \
+        pnpm install --frozen-lockfile --registry=https://registry.npmmirror.com; \
     fi
 
 # --------- builder -----------
-FROM node:24.22.1-bookworm-slim AS builder
-WORKDIR /app
-
-ARG proxy
+FROM maindeps AS builder
 ARG base_url
+ARG BUILD_NODE_HEAP_MB=5632
 
-# copy common node_modules and one project node_modules
-COPY package.json pnpm-workspace.yaml .npmrc tsconfig.json eslint.config.mjs ./
-COPY --from=maindeps /app/node_modules ./node_modules
-COPY --from=maindeps /app/packages ./packages
-COPY --from=maindeps /app/sdk ./sdk
+COPY eslint.config.mjs ./
 COPY ./projects/app ./projects/app
-COPY --from=maindeps /app/projects/app/node_modules ./projects/app/node_modules
 
-RUN [ -z "$proxy" ] || sed -i 's/deb.debian.org/mirrors.ustc.edu.cn/g' /etc/apt/sources.list.d/debian.sources
-
-RUN npm install -g pnpm@10.33.2
-
-ENV NODE_OPTIONS="--max-old-space-size=4096"
+ENV NODE_OPTIONS="--max-old-space-size=${BUILD_NODE_HEAP_MB}"
 ENV NEXT_PUBLIC_BASE_URL=$base_url
-# Build SDK workspace packages first so subpath exports like
-# @fastgpt-sdk/otel/logger have generated dist type files.
-RUN pnpm build:sdks
-RUN pnpm --filter @fastgpt/workflow-core build
-RUN pnpm --filter=app build
+ENV NEXT_TELEMETRY_DISABLED=1
+# The dependency stage's postinstall builds the SDK and workflow workspace packages.
+# Use the Webpack production build to avoid the Turbopack worker shutdown stall.
+RUN pnpm --filter=app build:webpack
 
 # Remove build-time-only packages from standalone output before copying to runner.
 RUN rm -rf projects/app/.next/standalone/node_modules/.pnpm/typescript@*/ \
@@ -65,8 +56,12 @@ RUN groupadd --system --gid 1001 nodejs && \
     useradd --system --uid 1001 -g nodejs nextjs
 
 RUN [ -z "$proxy" ] || sed -i 's/deb.debian.org/mirrors.ustc.edu.cn/g' /etc/apt/sources.list.d/debian.sources
-RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates procps \
-  && rm -rf /var/lib/apt/lists/*
+RUN sed -i 's|http://|https://|g' /etc/apt/sources.list.d/debian.sources \
+  && node -e "require('fs').writeFileSync('/tmp/node-ca.crt', require('tls').rootCertificates.join('\n') + '\n')" \
+  && apt-get -o Acquire::https::CaInfo=/tmp/node-ca.crt -o Acquire::Retries=2 update \
+  && apt-get -o Acquire::https::CaInfo=/tmp/node-ca.crt -o Acquire::Retries=2 \
+    install -y --no-install-recommends curl ca-certificates procps \
+  && rm -rf /var/lib/apt/lists/* /tmp/node-ca.crt
 
 # copy running files
 COPY --from=builder /app/projects/app/public /app/projects/app/public

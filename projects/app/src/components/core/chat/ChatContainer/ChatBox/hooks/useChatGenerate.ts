@@ -718,14 +718,16 @@ export const useChatGenerate = ({
 
           const requestVariables = formatChatRequestVariables({ variableList, variables });
 
-          const humanChatId = getNanoid(24);
           const currentChatTarget = chatAuthTarget;
+          const newRoundId = getNanoid(24);
           const responseChatId = resolveInteractiveResponseChatItemId({
             histories: history,
             interactive,
             interactiveVal: text,
-            responseChatItemId: getNanoid(24)
+            responseChatItemId: newRoundId
           });
+          // 新一轮的提问与回答共享后端保存的 dataId，续跑交互继续使用独立的临时提问 ID。
+          const humanChatId = responseChatId === newRoundId ? newRoundId : getNanoid(24);
           const previousAiDataId = getLastAiDataId(history);
           chatRequestActiveRef.current = true;
           try {

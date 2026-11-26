@@ -145,7 +145,7 @@ const Dataset = () => {
             <Flex flex={1} />
 
             {(isPc || hasCreatePer) && (
-              <Flex alignItems={'center'} gap={'12px'} pl={[0, 4]}>
+              <Flex alignItems={'center'} gap={'12px'} pl={[0, 4]} flexWrap={'wrap'}>
                 {isPc && (
                   <Button
                     variant={'primaryOutline'}

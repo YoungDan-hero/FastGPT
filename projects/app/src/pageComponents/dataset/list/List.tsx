@@ -1,8 +1,12 @@
 import React, { useMemo, useRef, useState } from 'react';
 import { postChangeOwner, resumeInheritPer } from '@/web/core/dataset/api';
 import ReferencedAppsPopover from '@/pageComponents/dashboard/ReferencedAppsPopover';
-import { Box, Flex, Grid, HStack, Checkbox } from '@chakra-ui/react';
+import { Box, Button, Flex, Grid, HStack, Checkbox } from '@chakra-ui/react';
 import { DatasetTypeEnum, DatasetTypeMap } from '@fastgpt/global/core/dataset/constants';
+import { feishuKnowledgeDatasetTypes } from '@fastgpt/global/core/app/feishuHandoff';
+import { feishuHandoffKnowledgeCountBatchSize } from '@fastgpt/global/openapi/core/app/feishuHandoff/api';
+import { getFeishuHandoffKnowledgeCounts } from '@/web/core/app/api/feishuHandoff';
+import { DatasetDetailTabEnum } from '@/web/core/dataset/constants';
 import MyMenu from '@fastgpt/web/components/common/MyMenu';
 import MyIcon from '@fastgpt/web/components/common/Icon';
 import { useRouter } from 'next/router';
@@ -69,6 +73,8 @@ function List() {
     onToggleSelectDataset
   } = useContextSelector(DatasetsContext, (v) => v);
   const { userInfo } = useUserStore();
+  const teamId = userInfo?.team.teamId;
+  const feishuOrgLogin = useSystemStore((state) => state.feConfigs?.feishuOrgLogin);
   const router = useRouter();
   const { parentId = null } = router.query as { parentId?: string | null };
   const canCreateDataset = parentId
@@ -76,6 +82,39 @@ function List() {
     : !!userInfo?.team?.permission.hasDatasetCreatePer;
   const [editPerDatasetId, setEditPerDatasetId] = useState<string>();
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+
+  const reviewDatasetIds = useMemo(
+    () =>
+      myDatasets
+        .filter(
+          (dataset) =>
+            dataset.permission.hasWritePer &&
+            feishuKnowledgeDatasetTypes.some((type) => type === dataset.type)
+        )
+        .map(({ _id }) => _id),
+    [myDatasets]
+  );
+  const { data: pendingHandoff } = useRequest(
+    async () => {
+      const requests = [];
+      for (let i = 0; i < reviewDatasetIds.length; i += feishuHandoffKnowledgeCountBatchSize) {
+        requests.push(
+          getFeishuHandoffKnowledgeCounts({
+            datasetIds: reviewDatasetIds.slice(i, i + feishuHandoffKnowledgeCountBatchSize)
+          })
+        );
+      }
+      const counts = (await Promise.all(requests)).flat();
+      return { teamId, counts: new Map(counts.map(({ datasetId, count }) => [datasetId, count])) };
+    },
+    {
+      manual: false,
+      ready: Boolean(feishuOrgLogin && teamId && reviewDatasetIds.length),
+      refreshDeps: [teamId, reviewDatasetIds.join(',')],
+      refreshOnWindowFocus: true,
+      errorToast: ''
+    }
+  );
 
   const formatDatasets = useMemo(
     () =>
@@ -187,6 +226,10 @@ function List() {
     const canBatchOperate = Boolean(
       dataset.permission?.hasManagePer || dataset.permission?.isOwner
     );
+    const pendingCount =
+      feishuOrgLogin && pendingHandoff?.teamId === teamId && dataset.permission.hasWritePer
+        ? (pendingHandoff?.counts.get(dataset._id) ?? 0)
+        : 0;
 
     return (
       <ResourceListCard
@@ -241,6 +284,38 @@ function List() {
               <Box className="textEllipsis">{dataset.name}</Box>
             </MyTooltip>
           </Box>
+
+          {!isBatchMode && pendingCount > 0 && (
+            <Button
+              variant="unstyled"
+              display="inline-flex"
+              alignSelf="center"
+              flexShrink={0}
+              minW={0}
+              h="26px"
+              px={2}
+              mx={2}
+              borderRadius="full"
+              fontSize="xs"
+              fontWeight="medium"
+              color="primary.700"
+              bg="primary.50"
+              _hover={{ bg: 'primary.100' }}
+              aria-label={`${dataset.name}，${pendingCount} 条待审核问答`}
+              onClick={(event) => {
+                event.stopPropagation();
+                void router.push({
+                  pathname: '/dataset/detail',
+                  query: {
+                    datasetId: dataset._id,
+                    currentTab: DatasetDetailTabEnum.handoffReview
+                  }
+                });
+              }}
+            >
+              待审核 {pendingCount}
+            </Button>
+          )}
 
           {isBatchMode ? (
             canBatchOperate ? (

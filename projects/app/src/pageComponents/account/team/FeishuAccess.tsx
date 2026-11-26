@@ -88,9 +88,7 @@ export default function FeishuAccess() {
     { label: resourceLabel, value: selectedResource?.name },
     { label: '权限', value: roles[form.role].label }
   ];
-  const listStatus = data
-    ? `${data.departments.length} 个部门 · ${data.members.length} 名在职员工`
-    : '正在载入飞书组织和资源…';
+  const listStatus = data ? `${data.members.length} 名在职员工` : '正在载入飞书组织和资源…';
 
   const confirmRemoval = () => {
     if (!canSave || !selectedPrincipal || !selectedResource) return;
@@ -217,6 +215,7 @@ export default function FeishuAccess() {
               list={principals.map(({ id, name }) => ({ value: id, label: name }))}
               onChange={(principalId) => setForm((current) => ({ ...current, principalId }))}
               isSearch
+              virtualScroll
               isDisabled={!principals.length || loading || saving || Boolean(error)}
               {...selectStyles}
             />

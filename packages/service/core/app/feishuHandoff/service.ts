@@ -105,9 +105,10 @@ export async function transferChatToFeishu({
   const credentials = getFeishuHandoffBotCredentials();
   if (!credentials) throw new UserError('管理员尚未配置飞书客服机器人');
 
+  const leaseKey = `feishu-handoff:${digest([teamId, tmbId, appId, chatId])}`;
   try {
     return await lease.withLease({
-      key: `feishu-handoff:${digest([teamId, tmbId, appId, chatId])}`,
+      key: leaseKey,
       label: 'Feishu handoff',
       ttlMs: 30_000,
       fn: async ({ assertValid }) => {
@@ -206,7 +207,27 @@ export async function transferChatToFeishu({
           { $setOnInsert: { appId, chatId, createUuid: randomUUID() } },
           { upsert: true, new: true }
         ).lean();
-        let feishuChatId = record.feishuChatId;
+        const createUuid = record.closedAt ? randomUUID() : record.createUuid;
+        if (record.closedAt) {
+          await MongoFeishuHandoff.updateOne(
+            { _id: id },
+            {
+              $set: { createUuid },
+              $unset: {
+                feishuChatId: 1,
+                lastMessageKey: 1,
+                promptedAt: 1,
+                closedAt: 1,
+                disbandRequested: 1,
+                nextCloseCheckAt: 1,
+                agentUnionIds: 1,
+                requesterUnionId: 1,
+                questionItemId: 1
+              }
+            }
+          );
+        }
+        let feishuChatId = record.closedAt ? undefined : record.feishuChatId;
         const reused = Boolean(feishuChatId);
         const messageKey = digest([id, content]).slice(0, 40);
         if (!feishuChatId || record.lastMessageKey !== messageKey) {
@@ -217,7 +238,7 @@ export async function transferChatToFeishu({
               token,
               name: `${group.name} · ${requester.name}`,
               unionIds,
-              uuid: record.createUuid
+              uuid: createUuid
             });
             assertValid();
             if (result.invalid_id_list?.length) {
@@ -227,12 +248,35 @@ export async function transferChatToFeishu({
             }
             feishuChatId = result.chat_id;
             // 即使发送卡片失败，也保留成功建立的群以便重试。
-            await MongoFeishuHandoff.updateOne({ _id: id }, { feishuChatId });
+            const groupCreatedAt = new Date();
+            const autoClose = config.data.autoClose;
+            await MongoFeishuHandoff.updateOne(
+              { _id: id },
+              {
+                feishuChatId,
+                ...(autoClose?.enabled && {
+                  botAppId: credentials.appId,
+                  leaseKey,
+                  groupCreatedAt,
+                  nextCloseCheckAt: new Date(
+                    groupCreatedAt.getTime() + autoClose.idleMinutes * 60_000
+                  ),
+                  agentUnionIds: agents.map(({ unionId }) => unionId),
+                  requesterUnionId: requester.unionId
+                })
+              }
+            );
           }
           assertValid();
           await sendFeishuHandoffCard({ token, chatId: feishuChatId, content, uuid: messageKey });
           assertValid();
-          await MongoFeishuHandoff.updateOne({ _id: id }, { lastMessageKey: messageKey });
+          await MongoFeishuHandoff.updateOne(
+            { _id: id },
+            {
+              lastMessageKey: messageKey,
+              ...(config.data.autoClose?.enabled && { questionItemId: question._id })
+            }
+          );
         }
 
         return {

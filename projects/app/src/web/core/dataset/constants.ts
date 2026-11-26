@@ -10,6 +10,15 @@ import type { DatasetCollectionItemType, DatasetItemType } from '@fastgpt/global
 import { DatasetPermission } from '@fastgpt/global/support/permission/dataset/controller';
 import { i18nT } from '@fastgpt/global/common/i18n/utils';
 
+export enum DatasetDetailTabEnum {
+  dataCard = 'dataCard',
+  collectionCard = 'collectionCard',
+  test = 'test',
+  handoffReview = 'handoffReview',
+  info = 'info',
+  import = 'import'
+}
+
 export const defaultDatasetDetail: DatasetItemType = {
   _id: '',
   parentId: '',

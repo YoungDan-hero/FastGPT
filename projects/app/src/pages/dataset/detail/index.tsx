@@ -5,7 +5,12 @@ import { useToast } from '@fastgpt/web/hooks/useToast';
 import { getErrText } from '@fastgpt/global/common/error/utils';
 import dynamic from 'next/dynamic';
 import PageContainer from '@/components/PageContainer';
-import { defaultDatasetDetail } from '@/web/core/dataset/constants';
+import {
+  defaultDatasetDetail,
+  DatasetDetailTabEnum as TabEnum
+} from '@/web/core/dataset/constants';
+import { feishuKnowledgeDatasetTypes } from '@fastgpt/global/core/app/feishuHandoff';
+import { useSystemStore } from '@/web/common/system/useSystemStore';
 import { useRequiredQueryParam } from '@/web/common/hooks/useRequiredQueryParam';
 import { useSafeTranslation } from '@fastgpt/web/hooks/useSafeTranslation';
 import MetaDataCard from '@/pageComponents/dataset/detail/MetaDataCard';
@@ -31,14 +36,10 @@ const CollectionFolderCard = dynamic(
   () => import('@/pageComponents/dataset/detail/CollectionFolderCard')
 );
 const Import = dynamic(() => import('@/pageComponents/dataset/detail/Import'));
+const FeishuHandoffKnowledgeReview = dynamic(
+  () => import('@/pageComponents/app/detail/FeishuHandoffKnowledgeReview')
+);
 
-export enum TabEnum {
-  dataCard = 'dataCard',
-  collectionCard = 'collectionCard',
-  test = 'test',
-  info = 'info',
-  import = 'import'
-}
 type Props = { datasetId: string; currentTab: TabEnum };
 
 const sliderStyles: FlexProps = {
@@ -48,11 +49,12 @@ const sliderStyles: FlexProps = {
   boxShadow: 2
 };
 
-const Detail = ({ datasetId, currentTab }: Props) => {
+const Detail = ({ datasetId, currentTab: requestedTab }: Props) => {
   const { t } = useSafeTranslation();
   const { toast } = useToast();
   const router = useRouter();
   const { isPc } = useSystem();
+  const feishuOrgLogin = useSystemStore((state) => state.feConfigs?.feishuOrgLogin);
   const datasetDetail = useContextSelector(DatasetPageContext, (v) => v.datasetDetail);
   const loadDatasetDetail = useContextSelector(DatasetPageContext, (v) => v.loadDatasetDetail);
   const collectionFolderAccessMode = useContextSelector(
@@ -62,6 +64,21 @@ const Detail = ({ datasetId, currentTab }: Props) => {
 
   const queryParentId = router.query.parentId;
   const parentId = typeof queryParentId === 'string' ? queryParentId : '';
+  const canReviewHandoff = Boolean(
+    feishuOrgLogin &&
+    datasetDetail.permission.hasWritePer &&
+    feishuKnowledgeDatasetTypes.some((type) => type === datasetDetail.type)
+  );
+  const currentTab =
+    requestedTab === TabEnum.handoffReview && datasetDetail._id && !canReviewHandoff
+      ? TabEnum.collectionCard
+      : requestedTab;
+  const handoffReview =
+    currentTab === TabEnum.handoffReview && canReviewHandoff ? (
+      <Box maxW="780px" mx="auto" px={[4, 6]} py={5}>
+        <FeishuHandoffKnowledgeReview datasetId={datasetId} />
+      </Box>
+    ) : null;
 
   useRequest(
     () => {
@@ -88,7 +105,9 @@ const Detail = ({ datasetId, currentTab }: Props) => {
       {isPc ? (
         <Flex h={'100%'} py={3} pl={1} pr={3} gap={2}>
           <Flex flex={1} w={0} bg={'white'} flexDir={'column'} boxShadow={'2'} borderRadius={'md'}>
-            {currentTab !== TabEnum.import && <NavBar currentTab={currentTab} />}
+            {currentTab !== TabEnum.import && (
+              <NavBar currentTab={currentTab} canReviewHandoff={canReviewHandoff} />
+            )}
             <Box flex={'1'} overflowY={'auto'}>
               {currentTab === TabEnum.collectionCard && (
                 <CollectionPageContextProvider>
@@ -98,6 +117,7 @@ const Detail = ({ datasetId, currentTab }: Props) => {
               {currentTab === TabEnum.test && <Test datasetId={datasetId} />}
               {currentTab === TabEnum.dataCard && <DataCard />}
               {currentTab === TabEnum.import && <Import />}
+              {handoffReview}
             </Box>
           </Flex>
 
@@ -129,7 +149,7 @@ const Detail = ({ datasetId, currentTab }: Props) => {
       ) : (
         <PageContainer insertProps={{ bg: 'white' }}>
           <MyBox display={'flex'} flexDirection={'column'} h={'100%'} pt={1}>
-            <NavBar currentTab={currentTab} />
+            <NavBar currentTab={currentTab} canReviewHandoff={canReviewHandoff} />
 
             {!!datasetDetail._id && (
               <Box flex={'1 0 0'} pb={0} overflow={'auto'}>
@@ -142,6 +162,7 @@ const Detail = ({ datasetId, currentTab }: Props) => {
                 {currentTab === TabEnum.test && <Test datasetId={datasetId} />}
                 {currentTab === TabEnum.info && <Info datasetId={datasetId} />}
                 {currentTab === TabEnum.import && <Import />}
+                {handoffReview}
               </Box>
             )}
           </MyBox>

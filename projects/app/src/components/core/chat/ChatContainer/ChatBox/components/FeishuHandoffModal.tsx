@@ -94,9 +94,20 @@ export function FeishuHandoffModal({
         borderRadius="24px"
         border="1px solid"
         borderColor="whiteAlpha.800"
-        bg="rgba(247, 249, 255, .72)"
-        bgImage="linear-gradient(145deg, rgba(255, 255, 255, .92), rgba(240, 244, 255, .8))"
-        backdropFilter="blur(18px) saturate(130%)"
+        bg="transparent"
+        isolation="isolate"
+        // 毛玻璃放在背景层，避免改变下拉菜单的固定定位基准。
+        _before={{
+          content: '""',
+          position: 'absolute',
+          inset: 0,
+          zIndex: -1,
+          borderRadius: 'inherit',
+          pointerEvents: 'none',
+          bg: 'rgba(247, 249, 255, .72)',
+          bgImage: 'linear-gradient(145deg, rgba(255, 255, 255, .92), rgba(240, 244, 255, .8))',
+          backdropFilter: 'blur(18px) saturate(130%)'
+        }}
         boxShadow="0 28px 80px rgba(33, 40, 78, .22), 0 4px 14px rgba(33, 40, 78, .08)"
       >
         <ModalHeader display="flex" alignItems="center" gap={3} px={6} pt={6} pb={0} pr="64px">

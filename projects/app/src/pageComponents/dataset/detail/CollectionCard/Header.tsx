@@ -17,7 +17,7 @@ import {
   ApiDatasetTypeMap
 } from '@fastgpt/global/core/dataset/constants';
 import EditFolderModal, { useEditFolder } from '../../EditFolderModal';
-import { TabEnum } from '../../../../pages/dataset/detail/index';
+import { DatasetDetailTabEnum as TabEnum } from '@/web/core/dataset/constants';
 import FolderPath from '@/components/common/folder/Path';
 import dynamic from 'next/dynamic';
 

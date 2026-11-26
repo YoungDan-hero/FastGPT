@@ -28,6 +28,7 @@ import {
 import * as systemConfig from '@fastgpt/service/common/system/systemInstanceConfig/runtime';
 import { wantsKnowledgeWrite } from '@fastgpt/service/support/user/feishu/knowledgeIntent';
 import { getFeishuTenantToken } from '@fastgpt/service/support/user/feishu/client';
+import { readFeishuDirectory } from '@fastgpt/service/support/user/feishu/directory';
 import {
   getFeishuDatasetAccessToken,
   saveFeishuDatasetGrant
@@ -188,6 +189,62 @@ describe('Feishu organization', () => {
     await expect(getFeishuDatasetAccessToken(actor)).resolves.toBe('new-access');
     await expect(getFeishuDatasetAccessToken(actor)).resolves.toBe('new-access');
     expect(fetchToken).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    { rootAllowed: true, title: 'reads the company root for all-members scope with user groups' },
+    { rootAllowed: false, title: 'rejects a user-group scope without access to the company root' }
+  ])('$title', async ({ rootAllowed }) => {
+    const department = {
+      open_department_id: 'od-sales',
+      parent_department_id: '0',
+      name: 'Sales'
+    };
+    const rootEmployee = {
+      open_id: 'ou_root_employee',
+      name: 'Root employee',
+      department_ids: ['0'],
+      status: { is_activated: true }
+    };
+    const departmentEmployee = {
+      ...rootEmployee,
+      open_id: 'ou_department_employee',
+      department_ids: [department.open_department_id]
+    };
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        const { pathname, searchParams } = new URL(url);
+        const json = (data: unknown) => Response.json({ code: 0, data });
+        switch (pathname) {
+          case '/open-apis/auth/v3/tenant_access_token/internal':
+            return Response.json({ code: 0, tenant_access_token: 'test-token' });
+          case '/open-apis/contact/v3/scopes':
+            return json(
+              searchParams.has('page_token')
+                ? { group_ids: ['group-sales'] }
+                : { department_ids: ['od-sales'], has_more: true, page_token: 'next' }
+            );
+          case '/open-apis/contact/v3/departments/0/children':
+            return rootAllowed ? json({ items: [department] }) : Response.json({ code: 40004 });
+          case '/open-apis/contact/v3/users/find_by_department':
+            return json({
+              items: [searchParams.get('department_id') === '0' ? rootEmployee : departmentEmployee]
+            });
+          default:
+            throw new Error('Unexpected request');
+        }
+      })
+    );
+
+    const result = readFeishuDirectory(() => {});
+    if (!rootAllowed) {
+      await expect(result).rejects.toMatchObject({ code: 40004 });
+      return;
+    }
+    const { departments, employees } = await result;
+    expect([...departments.values()]).toEqual([department]);
+    expect([...employees.values()]).toEqual([rootEmployee, departmentEmployee]);
   });
 
   it('moves existing members and revokes departed accounts without using a partial snapshot', async () => {

@@ -597,6 +597,7 @@ describe('useChatGenerate.sendPrompt', () => {
       expect(user.value).toEqual([{ select }]);
       expect(user.hideInUI).toBe(false);
       expect(ai.dataId).not.toBe('previous-ai');
+      expect(user.dataId).toBe(ai.dataId);
       expect(
         mocks.start.mock.calls[0][0].messages.filter(
           (message: { role: string }) => message.role === 'user'

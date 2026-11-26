@@ -93,7 +93,33 @@ const AppSchema = new Schema(
       type: new Schema(
         {
           enabled: Boolean,
-          defaultGroupId: Schema.Types.ObjectId
+          defaultGroupId: Schema.Types.ObjectId,
+          autoClose: {
+            type: new Schema(
+              {
+                enabled: Boolean,
+                idleMinutes: Number,
+                graceMinutes: Number,
+                prompt: String,
+                farewell: String
+              },
+              { _id: false }
+            ),
+            default: undefined
+          },
+          knowledgeMining: {
+            type: new Schema(
+              {
+                enabled: Boolean,
+                datasetId: Schema.Types.ObjectId,
+                targetCollectionId: Schema.Types.ObjectId,
+                retainDays: Number,
+                tmbId: Schema.Types.ObjectId
+              },
+              { _id: false }
+            ),
+            default: undefined
+          }
         },
         { _id: false }
       ),
@@ -196,4 +222,9 @@ defineIndex(AppSchema, { key: { deleteTime: 1 } });
 defineIndex(AppSchema, { key: { name: 1 } });
 defineIndex(AppSchema, { key: { tmbId: 1 } });
 
-export const MongoApp = getMongoModel<AppMongoSchemaType>(AppCollectionName, AppSchema);
+type AppDocument = AppMongoSchemaType & {
+  /** 知识提炼的授权人由服务端保存，API 配置模型不接收这个字段。 */
+  feishuHandoff?: { knowledgeMining?: { tmbId?: string } };
+};
+
+export const MongoApp = getMongoModel<AppDocument>(AppCollectionName, AppSchema);

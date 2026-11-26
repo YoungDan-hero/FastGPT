@@ -11,13 +11,26 @@ export function getFeishuOrgCredentials() {
   return { appId: FEISHU_ORG_APP_ID, secret: FEISHU_ORG_APP_SECRET };
 }
 
+export class FeishuRequestError extends Error {
+  constructor(
+    endpoint: string,
+    readonly code: number
+  ) {
+    super(`Feishu ${endpoint} returned ${code}`);
+  }
+}
+
 export async function feishuRequest<T extends z.ZodType>(
   path: string,
   schema: T,
-  { token, body }: { token?: string; body?: Record<string, unknown> } = {}
+  {
+    token,
+    body,
+    method
+  }: { token?: string; body?: Record<string, unknown>; method?: 'DELETE' } = {}
 ): Promise<z.infer<T>> {
   const response = await fetch(`${api}${path}`, {
-    method: body ? 'POST' : 'GET',
+    method: method ?? (body ? 'POST' : 'GET'),
     redirect: 'error',
     signal: AbortSignal.timeout(10_000),
     headers: {
@@ -27,12 +40,10 @@ export async function feishuRequest<T extends z.ZodType>(
     body: body && JSON.stringify(body)
   });
   const json: unknown = await response.json().catch(() => undefined);
-  const endpoint = path.split('?')[0].replace(/\/(?:ou_|od-)[^/]+/g, '/:id');
+  const endpoint = path.split('?')[0].replace(/\/(?:ou_|on_|oc_|od-)[^/]+/g, '/:id');
   const envelope = z.object({ code: z.number() }).safeParse(json);
   if (!response.ok || !envelope.success || envelope.data.code !== 0) {
-    throw new Error(
-      `Feishu ${endpoint} returned ${envelope.success ? envelope.data.code : response.status}`
-    );
+    throw new FeishuRequestError(endpoint, envelope.success ? envelope.data.code : response.status);
   }
   const result = schema.safeParse(json);
   if (!result.success) {

@@ -2,7 +2,7 @@ import z from 'zod';
 import { PluginStatusSchema, PluginTextSchema } from '../../../../plugin/type';
 import { LanguageSchema } from '../../../../../common/i18n/type';
 import { UserTagsSchema } from '../../../../../support/user/type';
-import { PluginPermissionEnumSchema } from '../../../../../sdk/fastgpt-plugin';
+import { PluginPermissionSchema } from '../../../../plugin/schema/permission';
 import { SystemToolSystemSecretStatusEnum } from '../constants';
 import { JSONSchemaInputTypeSchema, JSONSchemaOutputTypeSchema } from '../../../jsonschema';
 
@@ -102,7 +102,7 @@ export const SystemToolDetailSchema = z.object({
   secretsVal: z.record(z.string(), z.any()).nullish(),
   isLatestVersion: z.boolean().optional(),
   associatedPluginId: z.string().optional(),
-  permissions: z.array(PluginPermissionEnumSchema).optional()
+  permissions: z.array(PluginPermissionSchema).optional()
 });
 
 export type SystemToolDetailType = z.infer<typeof SystemToolDetailSchema>;

@@ -28,7 +28,6 @@ import {
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { WorkflowUIContext } from '../context/workflowUIContext';
 import { useTranslation } from 'next-i18next';
-import WorkflowBuilderEntry from '../WorkflowBuilder/WorkflowBuilderEntry';
 import { useWorkflowBuilderUI } from '../WorkflowBuilder/hooks/useWorkflowBuilderUI';
 import WorkflowToolbarTooltip from '../WorkflowBuilder/presentation/WorkflowToolbarTooltip';
 import { WorkflowModalContext } from '../context/workflowModalContext';
@@ -211,7 +210,6 @@ const Workflow = () => {
             borderRadius={'8px'}
             boxShadow={'0 0 1px rgba(19, 51, 107, 0.10), 0 4px 10px rgba(19, 51, 107, 0.10)'}
           >
-            <WorkflowBuilderEntry />
             <WorkflowToolbarTooltip label={t('workflow:to_add_node')}>
               <IconButton
                 icon={

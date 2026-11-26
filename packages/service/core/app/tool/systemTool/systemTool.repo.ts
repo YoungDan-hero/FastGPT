@@ -18,15 +18,16 @@ import {
   splitCombineToolId
 } from '@fastgpt/global/core/app/tool/utils';
 import { PluginStatusEnum, type PluginStatusType } from '@fastgpt/global/core/plugin/type';
-import { filterPluginTags } from '@fastgpt/global/core/plugin/utils';
 import {
   FlowNodeOutputTypeEnum,
   FlowNodeTypeEnum
 } from '@fastgpt/global/core/workflow/node/constant';
-import type {
-  PluginListParamsType,
-  PluginPermissionEnumType,
-  ToolDetailType as SDKToolDetailType
+import {
+  pluginTagList,
+  type PluginListParamsType,
+  type PluginPermissionEnumType,
+  type PluginTagType,
+  type ToolDetailType as SDKToolDetailType
 } from '@fastgpt/global/sdk/fastgpt-plugin';
 import { pluginClient, withPluginClientLocale } from '../../../../thirdProvider/fastgptPlugin';
 import { MongoSystemTool } from '../../../plugin/tool/systemToolSchema';
@@ -320,7 +321,8 @@ export class SystemToolRepo {
     lang?: `${LangEnum}`;
   }): Promise<SystemToolListItemType[]> => {
     // 1. get all tools from plugin by sources
-    const filteredTags = tags ? filterPluginTags(tags) : undefined;
+    const staticTags = pluginTagList.map((tag) => tag.id);
+    const filteredTags = tags?.filter((tag): tag is PluginTagType => staticTags.includes(tag));
     const tools = await withPluginClientLocale(lang, () =>
       includeDisabled
         ? listRetainedTools()

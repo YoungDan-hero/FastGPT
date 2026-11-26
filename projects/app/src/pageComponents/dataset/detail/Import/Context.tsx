@@ -11,7 +11,7 @@ import {
 import { useMyStep } from '@fastgpt/web/hooks/useStep';
 import { Box, Button, Flex, IconButton } from '@chakra-ui/react';
 import MyIcon from '@fastgpt/web/components/common/Icon';
-import { TabEnum } from '../NavBar';
+import { DatasetDetailTabEnum as TabEnum } from '@/web/core/dataset/constants';
 import { ChunkSettingModeEnum } from '@fastgpt/global/core/dataset/constants';
 import { type UseFormReturn, useForm } from 'react-hook-form';
 import { type ImportSourceItemType } from '@/web/core/dataset/type';
